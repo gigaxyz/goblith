@@ -4,7 +4,10 @@ import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.Gravity;
 import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
 
 public class MainActivity extends AppCompatActivity {
@@ -22,6 +25,11 @@ public class MainActivity extends AppCompatActivity {
             intent.setType("application/pdf");
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             startActivityForResult(intent, PICK_PDF);
+        });
+
+        Button btnNotes = findViewById(R.id.btnNotes);
+        btnNotes.setOnClickListener(v -> {
+            startActivity(new Intent(this, NotesActivity.class));
         });
     }
 
