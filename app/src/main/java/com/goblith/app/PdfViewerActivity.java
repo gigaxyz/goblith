@@ -6,7 +6,6 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Bundle;
@@ -43,7 +42,6 @@ public class PdfViewerActivity extends AppCompatActivity {
         DBHelper dbHelper = new DBHelper();
         db = dbHelper.getWritableDatabase();
 
-        // Ana layout
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xFF1A1A2E);
@@ -86,18 +84,16 @@ public class PdfViewerActivity extends AppCompatActivity {
         topBar.addView(btnGo);
         topBar.addView(btnNext);
 
-        // Sayfa gösterici
+        // Sayfa
         scrollView = new ScrollView(this);
         scrollView.setBackgroundColor(0xFF2A2A2A);
         pageView = new ImageView(this);
         pageView.setLayoutParams(new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT));
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         pageView.setAdjustViewBounds(true);
         scrollView.addView(pageView);
-        LinearLayout.LayoutParams svParams = new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1);
-        scrollView.setLayoutParams(svParams);
+        scrollView.setLayoutParams(new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
 
         // Alt butonlar
         LinearLayout bottomBar = new LinearLayout(this);
@@ -132,46 +128,36 @@ public class PdfViewerActivity extends AppCompatActivity {
         root.addView(bottomBar);
         setContentView(root);
 
-        // PDF aç
         pdfUri = getIntent().getStringExtra("pdfUri");
+        int startPage = getIntent().getIntExtra("startPage", 0);
+
         try {
             fileDescriptor = getContentResolver().openFileDescriptor(Uri.parse(pdfUri), "r");
             pdfRenderer = new PdfRenderer(fileDescriptor);
-            showPage(0);
+            showPage(startPage);
         } catch (IOException e) {
             Toast.makeText(this, "PDF açılamadı", Toast.LENGTH_SHORT).show();
         }
 
-        btnPrev.setOnClickListener(v -> {
-            if (currentPage > 0) showPage(currentPage - 1);
-        });
-
-        btnNext.setOnClickListener(v -> {
-            if (pdfRenderer != null && currentPage < pdfRenderer.getPageCount() - 1)
-                showPage(currentPage + 1);
-        });
+        btnPrev.setOnClickListener(v -> { if (currentPage > 0) showPage(currentPage - 1); });
+        btnNext.setOnClickListener(v -> { if (pdfRenderer != null && currentPage < pdfRenderer.getPageCount() - 1) showPage(currentPage + 1); });
 
         btnGo.setOnClickListener(v -> {
-            AlertDialog.Builder builder = new AlertDialog.Builder(this);
-            builder.setTitle("Sayfaya Git");
-            final EditText input = new EditText(this);
+            AlertDialog.Builder b = new AlertDialog.Builder(this);
+            b.setTitle("Sayfaya Git");
+            EditText input = new EditText(this);
             input.setInputType(InputType.TYPE_CLASS_NUMBER);
-            input.setHint("Sayfa numarası gir");
-            builder.setView(input);
-            builder.setPositiveButton("Git", (d, w) -> {
+            input.setHint("Sayfa numarası");
+            b.setView(input);
+            b.setPositiveButton("Git", (d, w) -> {
                 try {
-                    int page = Integer.parseInt(input.getText().toString()) - 1;
-                    if (page >= 0 && page < pdfRenderer.getPageCount()) {
-                        showPage(page);
-                    } else {
-                        Toast.makeText(this, "Geçersiz sayfa", Toast.LENGTH_SHORT).show();
-                    }
-                } catch (NumberFormatException e) {
-                    Toast.makeText(this, "Sayı gir", Toast.LENGTH_SHORT).show();
-                }
+                    int p = Integer.parseInt(input.getText().toString()) - 1;
+                    if (p >= 0 && p < pdfRenderer.getPageCount()) showPage(p);
+                    else Toast.makeText(this, "Geçersiz sayfa", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) { Toast.makeText(this, "Sayı gir", Toast.LENGTH_SHORT).show(); }
             });
-            builder.setNegativeButton("İptal", null);
-            builder.show();
+            b.setNegativeButton("İptal", null);
+            b.show();
         });
 
         btnRed.setOnClickListener(v -> saveHighlight("red", "🔴 İtiraz"));
@@ -182,30 +168,33 @@ public class PdfViewerActivity extends AppCompatActivity {
     private void showPage(int index) {
         if (pdfRenderer == null) return;
         currentPage = index;
-
         PdfRenderer.Page page = pdfRenderer.openPage(index);
         int width = getResources().getDisplayMetrics().widthPixels;
         int height = (int) ((float) page.getHeight() / page.getWidth() * width);
-
-        // Beyaz arka plan üzerine render et
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         canvas.drawColor(Color.WHITE);
         page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
         page.close();
-
         pageView.setImageBitmap(bitmap);
         scrollView.scrollTo(0, 0);
         pageInfo.setText((index + 1) + " / " + pdfRenderer.getPageCount());
+
+        // Kütüphaneye kaydet
+        ContentValues values = new ContentValues();
+        values.put("pdf_uri", pdfUri);
+        values.put("last_page", index);
+        values.put("last_opened", new java.util.Date().toString());
+        db.insertWithOnConflict("library", null, values, SQLiteDatabase.CONFLICT_REPLACE);
     }
 
     private void saveHighlight(String color, String label) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle(label + " — Sayfa " + (currentPage + 1));
-        final EditText input = new EditText(this);
+        AlertDialog.Builder b = new AlertDialog.Builder(this);
+        b.setTitle(label + " — Sayfa " + (currentPage + 1));
+        EditText input = new EditText(this);
         input.setHint("Bu sayfaya notun...");
-        builder.setView(input);
-        builder.setPositiveButton("Kaydet", (d, w) -> {
+        b.setView(input);
+        b.setPositiveButton("Kaydet", (d, w) -> {
             ContentValues values = new ContentValues();
             values.put("pdf_uri", pdfUri);
             values.put("page", currentPage);
@@ -214,20 +203,21 @@ public class PdfViewerActivity extends AppCompatActivity {
             db.insert("highlights", null, values);
             Toast.makeText(this, "Kaydedildi ✓", Toast.LENGTH_SHORT).show();
         });
-        builder.setNegativeButton("İptal", null);
-        builder.show();
+        b.setNegativeButton("İptal", null);
+        b.show();
     }
 
     class DBHelper extends SQLiteOpenHelper {
-        DBHelper() {
-            super(PdfViewerActivity.this, "goblith.db", null, 1);
-        }
+        DBHelper() { super(PdfViewerActivity.this, "goblith.db", null, 2); }
         @Override
         public void onCreate(SQLiteDatabase db) {
             db.execSQL("CREATE TABLE IF NOT EXISTS highlights (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, color TEXT, note TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
+            db.execSQL("CREATE TABLE IF NOT EXISTS library (pdf_uri TEXT PRIMARY KEY, last_page INTEGER DEFAULT 0, last_opened TEXT)");
         }
         @Override
-        public void onUpgrade(SQLiteDatabase db, int o, int n) {}
+        public void onUpgrade(SQLiteDatabase db, int o, int n) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS library (pdf_uri TEXT PRIMARY KEY, last_page INTEGER DEFAULT 0, last_opened TEXT)");
+        }
     }
 
     @Override
