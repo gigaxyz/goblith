@@ -4,14 +4,18 @@ import android.content.ContentValues;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
-import android.view.GestureDetector;
-import android.view.MotionEvent;
-import android.view.ScaleGestureDetector;
+import android.text.InputType;
+import android.view.Gravity;
+import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -30,12 +34,12 @@ public class PdfViewerActivity extends AppCompatActivity {
     private TextView pageInfo;
     private SQLiteDatabase db;
     private String pdfUri;
+    private ScrollView scrollView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Veritabanı kur
         DBHelper dbHelper = new DBHelper();
         db = dbHelper.getWritableDatabase();
 
@@ -47,36 +51,49 @@ public class PdfViewerActivity extends AppCompatActivity {
         // Üst bar
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
-        topBar.setBackgroundColor(0xFF16213E);
-        topBar.setPadding(16, 16, 16, 16);
+        topBar.setBackgroundColor(0xFF0F3460);
+        topBar.setPadding(8, 12, 8, 12);
+        topBar.setGravity(Gravity.CENTER_VERTICAL);
 
         Button btnPrev = new Button(this);
         btnPrev.setText("◀");
-        btnPrev.setBackgroundColor(0xFF16213E);
+        btnPrev.setBackgroundColor(0x00000000);
         btnPrev.setTextColor(0xFFFFFFFF);
+        btnPrev.setTextSize(18);
 
         pageInfo = new TextView(this);
         pageInfo.setTextColor(0xFFFFFFFF);
-        pageInfo.setPadding(16, 0, 16, 0);
-        LinearLayout.LayoutParams infoParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
+        pageInfo.setTextSize(14);
+        LinearLayout.LayoutParams infoParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
         pageInfo.setLayoutParams(infoParams);
-        pageInfo.setGravity(android.view.Gravity.CENTER);
+        pageInfo.setGravity(Gravity.CENTER);
+
+        Button btnGo = new Button(this);
+        btnGo.setText("Git");
+        btnGo.setBackgroundColor(0xFFE94560);
+        btnGo.setTextColor(0xFFFFFFFF);
+        btnGo.setTextSize(12);
+        btnGo.setPadding(16, 4, 16, 4);
 
         Button btnNext = new Button(this);
         btnNext.setText("▶");
-        btnNext.setBackgroundColor(0xFF16213E);
+        btnNext.setBackgroundColor(0x00000000);
         btnNext.setTextColor(0xFFFFFFFF);
+        btnNext.setTextSize(18);
 
         topBar.addView(btnPrev);
         topBar.addView(pageInfo);
+        topBar.addView(btnGo);
         topBar.addView(btnNext);
 
         // Sayfa gösterici
-        ScrollView scrollView = new ScrollView(this);
+        scrollView = new ScrollView(this);
+        scrollView.setBackgroundColor(0xFF2A2A2A);
         pageView = new ImageView(this);
         pageView.setLayoutParams(new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT));
+        pageView.setAdjustViewBounds(true);
         scrollView.addView(pageView);
         LinearLayout.LayoutParams svParams = new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1);
@@ -85,27 +102,26 @@ public class PdfViewerActivity extends AppCompatActivity {
         // Alt butonlar
         LinearLayout bottomBar = new LinearLayout(this);
         bottomBar.setOrientation(LinearLayout.HORIZONTAL);
-        bottomBar.setBackgroundColor(0xFF16213E);
+        bottomBar.setBackgroundColor(0xFF0F3460);
         bottomBar.setPadding(8, 8, 8, 8);
 
         Button btnRed = new Button(this);
         btnRed.setText("🔴 İtiraz");
         btnRed.setBackgroundColor(0xFFE94560);
         btnRed.setTextColor(0xFFFFFFFF);
-        LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
-        btnRed.setLayoutParams(btnParams);
+        btnRed.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
         Button btnBlue = new Button(this);
         btnBlue.setText("🔵 Argüman");
-        btnBlue.setBackgroundColor(0xFF0F3460);
+        btnBlue.setBackgroundColor(0xFF1565C0);
         btnBlue.setTextColor(0xFFFFFFFF);
-        btnBlue.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        btnBlue.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
         Button btnGreen = new Button(this);
         btnGreen.setText("🟢 Veri");
-        btnGreen.setBackgroundColor(0xFF1B5E20);
+        btnGreen.setBackgroundColor(0xFF2E7D32);
         btnGreen.setTextColor(0xFFFFFFFF);
-        btnGreen.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        btnGreen.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
         bottomBar.addView(btnRed);
         bottomBar.addView(btnBlue);
@@ -126,38 +142,68 @@ public class PdfViewerActivity extends AppCompatActivity {
             Toast.makeText(this, "PDF açılamadı", Toast.LENGTH_SHORT).show();
         }
 
-        // Buton olayları
         btnPrev.setOnClickListener(v -> {
             if (currentPage > 0) showPage(currentPage - 1);
         });
 
         btnNext.setOnClickListener(v -> {
-            if (currentPage < pdfRenderer.getPageCount() - 1) showPage(currentPage + 1);
+            if (pdfRenderer != null && currentPage < pdfRenderer.getPageCount() - 1)
+                showPage(currentPage + 1);
         });
 
-        btnRed.setOnClickListener(v -> saveHighlight("red"));
-        btnBlue.setOnClickListener(v -> saveHighlight("blue"));
-        btnGreen.setOnClickListener(v -> saveHighlight("green"));
+        btnGo.setOnClickListener(v -> {
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setTitle("Sayfaya Git");
+            final EditText input = new EditText(this);
+            input.setInputType(InputType.TYPE_CLASS_NUMBER);
+            input.setHint("Sayfa numarası gir");
+            builder.setView(input);
+            builder.setPositiveButton("Git", (d, w) -> {
+                try {
+                    int page = Integer.parseInt(input.getText().toString()) - 1;
+                    if (page >= 0 && page < pdfRenderer.getPageCount()) {
+                        showPage(page);
+                    } else {
+                        Toast.makeText(this, "Geçersiz sayfa", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (NumberFormatException e) {
+                    Toast.makeText(this, "Sayı gir", Toast.LENGTH_SHORT).show();
+                }
+            });
+            builder.setNegativeButton("İptal", null);
+            builder.show();
+        });
+
+        btnRed.setOnClickListener(v -> saveHighlight("red", "🔴 İtiraz"));
+        btnBlue.setOnClickListener(v -> saveHighlight("blue", "🔵 Argüman"));
+        btnGreen.setOnClickListener(v -> saveHighlight("green", "🟢 Veri"));
     }
 
     private void showPage(int index) {
         if (pdfRenderer == null) return;
         currentPage = index;
+
         PdfRenderer.Page page = pdfRenderer.openPage(index);
         int width = getResources().getDisplayMetrics().widthPixels;
         int height = (int) ((float) page.getHeight() / page.getWidth() * width);
+
+        // Beyaz arka plan üzerine render et
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawColor(Color.WHITE);
         page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
         page.close();
+
         pageView.setImageBitmap(bitmap);
+        scrollView.scrollTo(0, 0);
         pageInfo.setText((index + 1) + " / " + pdfRenderer.getPageCount());
     }
 
-    private void saveHighlight(String color) {
+    private void saveHighlight(String color, String label) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Not ekle (isteğe bağlı)");
-        final android.widget.EditText input = new android.widget.EditText(this);
-        input.setHint("Bu sayfa için notun...");
+        builder.setTitle(label + " — Sayfa " + (currentPage + 1));
+        final EditText input = new EditText(this);
+        input.setHint("Bu sayfaya notun...");
         builder.setView(input);
         builder.setPositiveButton("Kaydet", (d, w) -> {
             ContentValues values = new ContentValues();
@@ -166,7 +212,7 @@ public class PdfViewerActivity extends AppCompatActivity {
             values.put("color", color);
             values.put("note", input.getText().toString());
             db.insert("highlights", null, values);
-            Toast.makeText(this, "Kaydedildi!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Kaydedildi ✓", Toast.LENGTH_SHORT).show();
         });
         builder.setNegativeButton("İptal", null);
         builder.show();
@@ -178,7 +224,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         }
         @Override
         public void onCreate(SQLiteDatabase db) {
-            db.execSQL("CREATE TABLE highlights (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, color TEXT, note TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
+            db.execSQL("CREATE TABLE IF NOT EXISTS highlights (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, color TEXT, note TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
         }
         @Override
         public void onUpgrade(SQLiteDatabase db, int o, int n) {}
