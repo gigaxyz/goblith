@@ -20,6 +20,8 @@
 
         <activity android:name=".PdfViewerActivity" android:exported="false"/>
         <activity android:name=".NotesActivity" android:exported="false"/>
+        <activity android:name=".WordAnalysisActivity" android:exported="false"/>
+        <activity android:name=".StatsActivity" android:exported="false"/>
 
     </application>
 

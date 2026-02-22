@@ -29,14 +29,13 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        DBHelper dbHelper = new DBHelper();
-        db = dbHelper.getWritableDatabase();
+        db = new DBHelper().getWritableDatabase();
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xFF1A1A2E);
 
+        // Başlık
         TextView title = new TextView(this);
         title.setText("Goblith");
         title.setTextColor(0xFFE94560);
@@ -49,35 +48,40 @@ public class MainActivity extends AppCompatActivity {
         subtitle.setText("Kisisel Bilgi Sistemi");
         subtitle.setTextColor(0xFF888888);
         subtitle.setTextSize(13);
-        subtitle.setPadding(24, 0, 24, 32);
+        subtitle.setPadding(24, 0, 24, 24);
         root.addView(subtitle);
 
-        LinearLayout btnRow = new LinearLayout(this);
-        btnRow.setOrientation(LinearLayout.HORIZONTAL);
-        btnRow.setPadding(16, 0, 16, 24);
+        // İlk buton satırı
+        LinearLayout btnRow1 = new LinearLayout(this);
+        btnRow1.setOrientation(LinearLayout.HORIZONTAL);
+        btnRow1.setPadding(16, 0, 16, 12);
 
-        Button btnOpenFile = new Button(this);
-        btnOpenFile.setText("+ DOSYA EKLE");
-        btnOpenFile.setBackgroundColor(0xFFE94560);
-        btnOpenFile.setTextColor(0xFFFFFFFF);
-        btnOpenFile.setTextSize(14);
-        btnOpenFile.setTypeface(null, android.graphics.Typeface.BOLD);
-        btnOpenFile.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        Button btnOpenFile = makeButton("+ DOSYA EKLE", 0xFFE94560, 1);
+        Button btnNotes = makeButton("ALINTI BANKASI", 0xFF0F3460, 1);
+        LinearLayout.LayoutParams m = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+        m.setMargins(12, 0, 0, 0);
+        btnNotes.setLayoutParams(m);
 
-        Button btnNotes = new Button(this);
-        btnNotes.setText("ALINTI BANKASI");
-        btnNotes.setBackgroundColor(0xFF0F3460);
-        btnNotes.setTextColor(0xFFFFFFFF);
-        btnNotes.setTextSize(14);
-        btnNotes.setTypeface(null, android.graphics.Typeface.BOLD);
-        LinearLayout.LayoutParams notesParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
-        notesParams.setMargins(12, 0, 0, 0);
-        btnNotes.setLayoutParams(notesParams);
+        btnRow1.addView(btnOpenFile);
+        btnRow1.addView(btnNotes);
+        root.addView(btnRow1);
 
-        btnRow.addView(btnOpenFile);
-        btnRow.addView(btnNotes);
-        root.addView(btnRow);
+        // İkinci buton satırı
+        LinearLayout btnRow2 = new LinearLayout(this);
+        btnRow2.setOrientation(LinearLayout.HORIZONTAL);
+        btnRow2.setPadding(16, 0, 16, 24);
 
+        Button btnWords = makeButton("KELIME ANALIZI", 0xFF6A1B9A, 1);
+        Button btnStats = makeButton("ISTATISTIKLER", 0xFF1A5276, 1);
+        LinearLayout.LayoutParams m2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+        m2.setMargins(12, 0, 0, 0);
+        btnStats.setLayoutParams(m2);
+
+        btnRow2.addView(btnWords);
+        btnRow2.addView(btnStats);
+        root.addView(btnRow2);
+
+        // Kütüphane başlık
         TextView libTitle = new TextView(this);
         libTitle.setText("KUTUPHANEM");
         libTitle.setTextColor(0xFF888888);
@@ -99,18 +103,27 @@ public class MainActivity extends AppCompatActivity {
         btnOpenFile.setOnClickListener(v -> {
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.setType("*/*");
-            String[] mimeTypes = {
-                "application/pdf",
-                "text/plain",
-                "text/html",
-                "application/epub+zip"
-            };
-            intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{
+                "application/pdf", "text/plain", "text/html", "application/epub+zip"
+            });
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             startActivityForResult(intent, PICK_FILE);
         });
 
         btnNotes.setOnClickListener(v -> startActivity(new Intent(this, NotesActivity.class)));
+        btnWords.setOnClickListener(v -> startActivity(new Intent(this, WordAnalysisActivity.class)));
+        btnStats.setOnClickListener(v -> startActivity(new Intent(this, StatsActivity.class)));
+    }
+
+    private Button makeButton(String text, int color, float weight) {
+        Button btn = new Button(this);
+        btn.setText(text);
+        btn.setBackgroundColor(color);
+        btn.setTextColor(0xFFFFFFFF);
+        btn.setTextSize(12);
+        btn.setTypeface(null, android.graphics.Typeface.BOLD);
+        btn.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, weight));
+        return btn;
     }
 
     private String getFileName(Uri uri) {
@@ -121,38 +134,33 @@ public class MainActivity extends AppCompatActivity {
                 if (idx >= 0) result = cursor.getString(idx);
             }
         } catch (Exception e) {}
-        if (result == null) {
-            result = uri.getLastPathSegment();
-            if (result == null) result = "Bilinmeyen Dosya";
-        }
-        // Uzantıyı kaldır
+        if (result == null) result = uri.getLastPathSegment();
+        if (result == null) result = "Bilinmeyen";
         int dot = result.lastIndexOf('.');
         if (dot > 0) result = result.substring(0, dot);
         return result;
     }
 
-    private String getFileType(Uri uri, String fileName) {
+    private String getFileType(Uri uri) {
         String type = getContentResolver().getType(uri);
         if (type == null) type = "";
         if (type.contains("pdf")) return "PDF";
         if (type.contains("text")) return "TXT";
         if (type.contains("epub")) return "EPUB";
-        // URI'dan uzantı bak
         String path = uri.toString().toLowerCase();
         if (path.endsWith(".pdf")) return "PDF";
         if (path.endsWith(".txt")) return "TXT";
-        if (path.endsWith(".epub")) return "EPUB";
         return "PDF";
     }
 
     private void loadLibrary() {
         libraryContainer.removeAllViews();
         Cursor cursor = db.rawQuery(
-            "SELECT pdf_uri, custom_name, last_page, last_opened, file_type FROM library ORDER BY last_opened DESC LIMIT 30", null);
+            "SELECT pdf_uri, custom_name, file_type, last_page, last_opened FROM library ORDER BY last_opened DESC LIMIT 30", null);
 
         if (cursor.getCount() == 0) {
             TextView empty = new TextView(this);
-            empty.setText("Kutuphaneniz bos.\nDOSYA EKLE butonuyla baslayin.");
+            empty.setText("Kutuphaneniz bos.\nDOSYA EKLE ile baslayin.");
             empty.setTextColor(0xFF555555);
             empty.setTextSize(14);
             empty.setGravity(Gravity.CENTER);
@@ -163,29 +171,27 @@ public class MainActivity extends AppCompatActivity {
         }
 
         while (cursor.moveToNext()) {
-            String uri = cursor.getString(cursor.getColumnIndexOrThrow("pdf_uri"));
-            String customName = cursor.getString(cursor.getColumnIndexOrThrow("custom_name"));
-            int lastPage = cursor.getInt(cursor.getColumnIndexOrThrow("last_page"));
-            String lastOpened = cursor.getString(cursor.getColumnIndexOrThrow("last_opened"));
-            String fileType = cursor.getString(cursor.getColumnIndexOrThrow("file_type"));
+            String uri = cursor.getString(0);
+            String customName = cursor.getString(1);
+            String fileType = cursor.getString(2);
+            int lastPage = cursor.getInt(3);
+            String lastOpened = cursor.getString(4);
             if (fileType == null) fileType = "PDF";
-
             String displayName = (customName != null && !customName.isEmpty()) ? customName : "Bilinmeyen";
 
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setBackgroundColor(0xFF16213E);
             card.setPadding(20, 16, 20, 16);
-            LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            cardParams.setMargins(0, 0, 0, 10);
-            card.setLayoutParams(cardParams);
+            cp.setMargins(0, 0, 0, 10);
+            card.setLayoutParams(cp);
 
             LinearLayout topRow = new LinearLayout(this);
             topRow.setOrientation(LinearLayout.HORIZONTAL);
             topRow.setGravity(Gravity.CENTER_VERTICAL);
 
-            // Tür etiketi
             TextView typeTag = new TextView(this);
             typeTag.setText(" " + fileType + " ");
             typeTag.setTextColor(0xFFFFFFFF);
@@ -193,9 +199,9 @@ public class MainActivity extends AppCompatActivity {
             typeTag.setTypeface(null, android.graphics.Typeface.BOLD);
             typeTag.setBackgroundColor(fileType.equals("PDF") ? 0xFFE94560 : 0xFF0F3460);
             typeTag.setPadding(8, 4, 8, 4);
-            LinearLayout.LayoutParams tagParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            tagParams.setMargins(0, 0, 12, 0);
-            typeTag.setLayoutParams(tagParams);
+            LinearLayout.LayoutParams tagP = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            tagP.setMargins(0, 0, 12, 0);
+            typeTag.setLayoutParams(tagP);
             topRow.addView(typeTag);
 
             TextView nameView = new TextView(this);
@@ -227,7 +233,7 @@ public class MainActivity extends AppCompatActivity {
             card.addView(topRow);
 
             TextView infoView = new TextView(this);
-            infoView.setText("Sayfa " + (lastPage + 1) + "  |  " + (lastOpened != null && lastOpened.length() >= 10 ? lastOpened.substring(0, 10) : ""));
+            infoView.setText("Sayfa " + (lastPage+1) + "  |  " + (lastOpened != null && lastOpened.length() >= 10 ? lastOpened.substring(0, 10) : ""));
             infoView.setTextColor(0xFF888888);
             infoView.setTextSize(12);
             infoView.setPadding(0, 6, 0, 0);
@@ -235,24 +241,24 @@ public class MainActivity extends AppCompatActivity {
 
             libraryContainer.addView(card);
 
-            final String pdfUri = uri;
-            final int resumePage = lastPage;
-            final String currentName = displayName;
+            final String fUri = uri;
+            final int fPage = lastPage;
             final String fType = fileType;
+            final String fName = displayName;
 
-            card.setOnClickListener(v -> openFile(pdfUri, resumePage, fType));
+            card.setOnClickListener(v -> openFile(fUri, fPage, fType));
 
             btnRename.setOnClickListener(v -> {
                 AlertDialog.Builder b = new AlertDialog.Builder(this);
                 b.setTitle("Adi Degistir");
                 EditText input = new EditText(this);
-                input.setText(currentName);
+                input.setText(fName);
                 input.setSelectAllOnFocus(true);
                 b.setView(input);
                 b.setPositiveButton("Kaydet", (d, w) -> {
                     ContentValues values = new ContentValues();
                     values.put("custom_name", input.getText().toString().trim());
-                    db.update("library", values, "pdf_uri=?", new String[]{pdfUri});
+                    db.update("library", values, "pdf_uri=?", new String[]{fUri});
                     loadLibrary();
                 });
                 b.setNegativeButton("Iptal", null);
@@ -261,11 +267,8 @@ public class MainActivity extends AppCompatActivity {
 
             btnDelete.setOnClickListener(v -> new AlertDialog.Builder(this)
                 .setTitle("Kaldir")
-                .setMessage("\"" + currentName + "\" listeden kaldirilsin mi?")
-                .setPositiveButton("Kaldir", (d, w) -> {
-                    db.delete("library", "pdf_uri=?", new String[]{pdfUri});
-                    loadLibrary();
-                })
+                .setMessage("\"" + fName + "\" listeden kaldirilsin mi?")
+                .setPositiveButton("Kaldir", (d, w) -> { db.delete("library", "pdf_uri=?", new String[]{fUri}); loadLibrary(); })
                 .setNegativeButton("Iptal", null)
                 .show());
         }
@@ -285,14 +288,10 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == PICK_FILE && resultCode == Activity.RESULT_OK && data != null) {
             Uri fileUri = data.getData();
-            try {
-                getContentResolver().takePersistableUriPermission(fileUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            } catch (Exception e) {}
-
+            try { getContentResolver().takePersistableUriPermission(fileUri, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception e) {}
             String uriStr = fileUri.toString();
             String fileName = getFileName(fileUri);
-            String fileType = getFileType(fileUri, fileName);
-
+            String fileType = getFileType(fileUri);
             ContentValues values = new ContentValues();
             values.put("pdf_uri", uriStr);
             values.put("custom_name", fileName);
@@ -300,26 +299,19 @@ public class MainActivity extends AppCompatActivity {
             values.put("last_page", 0);
             values.put("last_opened", new java.util.Date().toString());
             db.insertWithOnConflict("library", null, values, SQLiteDatabase.CONFLICT_REPLACE);
-
             openFile(uriStr, 0, fileType);
         }
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-        loadLibrary();
-    }
+    @Override protected void onResume() { super.onResume(); loadLibrary(); }
 
     class DBHelper extends SQLiteOpenHelper {
         DBHelper() { super(MainActivity.this, "goblith.db", null, 3); }
-        @Override
-        public void onCreate(SQLiteDatabase db) {
+        @Override public void onCreate(SQLiteDatabase db) {
             db.execSQL("CREATE TABLE IF NOT EXISTS highlights (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, color TEXT, note TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
             db.execSQL("CREATE TABLE IF NOT EXISTS library (pdf_uri TEXT PRIMARY KEY, custom_name TEXT, file_type TEXT DEFAULT 'PDF', last_page INTEGER DEFAULT 0, last_opened TEXT)");
         }
-        @Override
-        public void onUpgrade(SQLiteDatabase db, int o, int n) {
+        @Override public void onUpgrade(SQLiteDatabase db, int o, int n) {
             try { db.execSQL("ALTER TABLE library ADD COLUMN custom_name TEXT"); } catch (Exception e) {}
             try { db.execSQL("ALTER TABLE library ADD COLUMN file_type TEXT DEFAULT 'PDF'"); } catch (Exception e) {}
         }
