@@ -10,7 +10,6 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
-import android.graphics.RectF;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Bundle;
@@ -54,8 +53,8 @@ public class PdfViewerActivity extends AppCompatActivity {
     private SQLiteDatabase db;
     private String pdfUri;
     private String fileType;
+    private int imgWidth=1, imgHeight=1;
 
-    // Zoom + Pan
     private Matrix matrix = new Matrix();
     private Matrix savedMatrix = new Matrix();
     private ScaleGestureDetector scaleDetector;
@@ -64,14 +63,12 @@ public class PdfViewerActivity extends AppCompatActivity {
     private int touchMode = TOUCH_NONE;
     private static final float MIN_ZOOM=1.0f, MAX_ZOOM=5.0f;
 
-    // Highlight modu
     private boolean highlightMode = false;
+    private boolean deleteMode = false;
     private String highlightColor = "yellow";
-    private Button btnHighlightToggle;
     private LinearLayout highlightColorBar;
-    private int imgWidth = 1, imgHeight = 1;
+    private Button btnMark;
 
-    // Hızlı geçiş
     private Handler fastScrollHandler = new Handler();
     private boolean isFastScrolling = false;
 
@@ -79,23 +76,23 @@ public class PdfViewerActivity extends AppCompatActivity {
         "Felsefe","Ekonomi","Strateji","Bilim","Tarih","Psikoloji","Diger"
     );
 
-    // ————— HIGHLIGHT OVERLAY VIEW —————
+    // ——— HIGHLIGHT OVERLAY ———
     class HighlightOverlay extends View {
+        private List<long[]> highlightIds = new ArrayList<>();
         private List<float[]> highlights = new ArrayList<>();
         private Paint paint = new Paint();
         private float startX, startY, endX, endY;
         private boolean drawing = false;
-        private int viewW, viewH;
 
         HighlightOverlay(Context ctx) {
             super(ctx);
             setBackgroundColor(Color.TRANSPARENT);
         }
 
-        void setSize(int w, int h) { viewW=w; viewH=h; }
-
-        void loadHighlights(List<float[]> list) {
-            highlights = new ArrayList<>(list);
+        void loadHighlights(List<long[]> ids, List<float[]> rects) {
+            highlightIds = new ArrayList<>(ids);
+            highlights = new ArrayList<>(rects);
+            drawing = false;
             invalidate();
         }
 
@@ -111,73 +108,94 @@ public class PdfViewerActivity extends AppCompatActivity {
             drawing=false;
             float x1=Math.min(startX,endX), y1=Math.min(startY,endY);
             float x2=Math.max(startX,endX), y2=Math.max(startY,endY);
-            if (Math.abs(x2-x1)<20 || Math.abs(y2-y1)<10) { invalidate(); return null; }
-            float[] rect = {x1/getWidth(), y1/getHeight(), x2/getWidth(), y2/getHeight()};
-            highlights.add(new float[]{rect[0],rect[1],rect[2],rect[3],colorToFloat(highlightColor)});
             invalidate();
-            return rect;
+            if (Math.abs(x2-x1)<15 || Math.abs(y2-y1)<8) return null;
+            return new float[]{x1/getWidth(), y1/getHeight(), x2/getWidth(), y2/getHeight()};
         }
 
-        void removeHighlight(float tx, float ty) {
-            float nx = tx/getWidth(), ny = ty/getHeight();
+        void addHighlight(long dbId, float x1, float y1, float x2, float y2, String color) {
+            highlightIds.add(new long[]{dbId});
+            highlights.add(new float[]{x1, y1, x2, y2, colorToFloat(color)});
+            invalidate();
+        }
+
+        // Geri al — son eklenen
+        long undoLast() {
+            if (highlights.isEmpty()) return -1;
+            highlights.remove(highlights.size()-1);
+            long id = highlightIds.get(highlightIds.size()-1)[0];
+            highlightIds.remove(highlightIds.size()-1);
+            invalidate();
+            return id;
+        }
+
+        // Tıklanan yerdeki highlight'ı sil
+        long removeTouched(float tx, float ty) {
+            float nx=tx/getWidth(), ny=ty/getHeight();
             for (int i=highlights.size()-1; i>=0; i--) {
-                float[] h = highlights.get(i);
+                float[] h=highlights.get(i);
                 if (nx>=h[0] && nx<=h[2] && ny>=h[1] && ny<=h[3]) {
                     highlights.remove(i);
+                    long id=highlightIds.get(i)[0];
+                    highlightIds.remove(i);
                     invalidate();
-                    return;
+                    return id;
                 }
             }
+            return -1;
         }
 
         private float colorToFloat(String c) {
             switch(c) {
-                case "yellow": return 0;
-                case "red": return 1;
-                case "blue": return 2;
+                case "red":   return 1;
+                case "blue":  return 2;
                 case "green": return 3;
-                default: return 0;
+                default:      return 0;
+            }
+        }
+
+        private int getColor(float f) {
+            switch((int)f) {
+                case 1: return 0x55FF4560;
+                case 2: return 0x554488FF;
+                case 3: return 0x5544CC66;
+                default: return 0x55FFE500;
+            }
+        }
+
+        private int getStrokeColor(float f) {
+            switch((int)f) {
+                case 1: return 0xAAFF4560;
+                case 2: return 0xAA4488FF;
+                case 3: return 0xAA44CC66;
+                default: return 0xAADDAA00;
             }
         }
 
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
-            int w = getWidth(), h = getHeight();
-            // Kaydedilmiş highlight'lar
+            int w=getWidth(), h=getHeight();
             for (float[] hl : highlights) {
                 paint.reset();
                 paint.setStyle(Paint.Style.FILL);
-                switch((int)hl[4]) {
-                    case 0: paint.setColor(0x88FFE066); break;
-                    case 1: paint.setColor(0x88FF4560); break;
-                    case 2: paint.setColor(0x884488FF); break;
-                    case 3: paint.setColor(0x8844CC66); break;
-                    default: paint.setColor(0x88FFE066);
-                }
+                paint.setColor(getColor(hl[4]));
                 canvas.drawRect(hl[0]*w, hl[1]*h, hl[2]*w, hl[3]*h, paint);
-                // Kenar çizgisi
                 paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(2);
-                paint.setAlpha(180);
+                paint.setStrokeWidth(1.5f);
+                paint.setColor(getStrokeColor(hl[4]));
                 canvas.drawRect(hl[0]*w, hl[1]*h, hl[2]*w, hl[3]*h, paint);
             }
-            // Çizim yapılıyor
             if (drawing) {
-                paint.reset();
-                paint.setStyle(Paint.Style.FILL);
-                switch(highlightColor) {
-                    case "yellow": paint.setColor(0x66FFE066); break;
-                    case "red":    paint.setColor(0x66FF4560); break;
-                    case "blue":   paint.setColor(0x664488FF); break;
-                    case "green":  paint.setColor(0x6644CC66); break;
-                }
                 float x1=Math.min(startX,endX), y1=Math.min(startY,endY);
                 float x2=Math.max(startX,endX), y2=Math.max(startY,endY);
+                paint.reset();
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(0x44FFE500);
                 canvas.drawRect(x1,y1,x2,y2,paint);
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(2);
-                paint.setColor(0xFFFFFFFF);
+                paint.setColor(0xCCFFFFFF);
                 canvas.drawRect(x1,y1,x2,y2,paint);
             }
         }
@@ -226,47 +244,65 @@ public class PdfViewerActivity extends AppCompatActivity {
         highlightColorBar.setPadding(8,6,8,6);
         highlightColorBar.setVisibility(View.GONE);
 
-        btnHighlightToggle = new Button(this);
-        btnHighlightToggle.setText("ISARETLE");
-        btnHighlightToggle.setBackgroundColor(0xFF6A1B9A);
-        btnHighlightToggle.setTextColor(0xFFFFFFFF);
-        btnHighlightToggle.setTextSize(11);
-        btnHighlightToggle.setTypeface(null, android.graphics.Typeface.BOLD);
-        btnHighlightToggle.setPadding(16,6,16,6);
-        highlightColorBar.addView(btnHighlightToggle);
-
         // Renk butonları
-        String[] hlColors = {"Sari","Kirmizi","Mavi","Yesil"};
-        int[] hlColorVals = {0xFFFFE066, 0xFFFF4560, 0xFF4488FF, 0xFF44CC66};
-        String[] hlColorKeys = {"yellow","red","blue","green"};
+        String[] hlNames = {"Sari","Kirmizi","Mavi","Yesil"};
+        int[] hlVals = {0xFFFFE500, 0xFFFF4560, 0xFF4488FF, 0xFF44CC66};
+        String[] hlKeys = {"yellow","red","blue","green"};
+        Button[] colorBtns = new Button[hlNames.length];
 
-        for (int i=0; i<hlColors.length; i++) {
+        for (int i=0; i<hlNames.length; i++) {
             Button cb = new Button(this);
-            cb.setText(hlColors[i]);
-            cb.setBackgroundColor(hlColorVals[i]);
+            cb.setText(hlNames[i]);
+            cb.setBackgroundColor(hlVals[i]);
             cb.setTextColor(0xFF000000);
             cb.setTextSize(10);
-            cb.setPadding(12,6,12,6);
+            cb.setTypeface(null, android.graphics.Typeface.BOLD);
+            cb.setPadding(14,6,14,6);
             LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            cp.setMargins(6,0,0,0);
+            cp.setMargins(4,0,0,0);
             cb.setLayoutParams(cp);
-            final String key = hlColorKeys[i];
-            cb.setOnClickListener(v -> { highlightColor=key; });
+            colorBtns[i] = cb;
+            final String key = hlKeys[i];
+            final int idx = i;
+            cb.setOnClickListener(v -> {
+                highlightColor = key;
+                deleteMode = false;
+                for (Button b2 : colorBtns) b2.setAlpha(0.5f);
+                colorBtns[idx].setAlpha(1.0f);
+            });
             highlightColorBar.addView(cb);
         }
+        colorBtns[0].setAlpha(1.0f);
+        for (int i=1;i<colorBtns.length;i++) colorBtns[i].setAlpha(0.5f);
 
-        Button btnHlDelete = new Button(this);
-        btnHlDelete.setText("SIL");
-        btnHlDelete.setBackgroundColor(0xFF333333);
-        btnHlDelete.setTextColor(0xFFFFFFFF);
-        btnHlDelete.setTextSize(10);
-        btnHlDelete.setPadding(12,6,12,6);
-        LinearLayout.LayoutParams delP = new LinearLayout.LayoutParams(
+        // Geri al butonu
+        Button btnUndo = new Button(this);
+        btnUndo.setText("GERI AL");
+        btnUndo.setBackgroundColor(0xFF555555);
+        btnUndo.setTextColor(0xFFFFFFFF);
+        btnUndo.setTextSize(10);
+        btnUndo.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnUndo.setPadding(14,6,14,6);
+        LinearLayout.LayoutParams up = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        delP.setMargins(6,0,0,0);
-        btnHlDelete.setLayoutParams(delP);
-        highlightColorBar.addView(btnHlDelete);
+        up.setMargins(8,0,0,0);
+        btnUndo.setLayoutParams(up);
+        highlightColorBar.addView(btnUndo);
+
+        // Sil modu butonu
+        Button btnDelMode = new Button(this);
+        btnDelMode.setText("SIL");
+        btnDelMode.setBackgroundColor(0xFF333333);
+        btnDelMode.setTextColor(0xFFFFFFFF);
+        btnDelMode.setTextSize(10);
+        btnDelMode.setTypeface(null, android.graphics.Typeface.BOLD);
+        btnDelMode.setPadding(14,6,14,6);
+        LinearLayout.LayoutParams dmp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dmp.setMargins(4,0,0,0);
+        btnDelMode.setLayoutParams(dmp);
+        highlightColorBar.addView(btnDelMode);
 
         // İçerik alanı
         FrameLayout contentArea = new FrameLayout(this);
@@ -281,7 +317,7 @@ public class PdfViewerActivity extends AppCompatActivity {
             txtContent.setBackgroundColor(Color.WHITE);
             txtContent.setTextSize(15);
             txtContent.setPadding(24,24,24,24);
-            txtContent.setLineSpacing(4, 1.3f);
+            txtContent.setLineSpacing(4,1.3f);
             sv.addView(txtContent);
             sv.setLayoutParams(new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
@@ -299,7 +335,6 @@ public class PdfViewerActivity extends AppCompatActivity {
             highlightOverlay.setLayoutParams(new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
             contentArea.addView(highlightOverlay);
-
             setupTouch();
         }
 
@@ -309,7 +344,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         bottomBar.setBackgroundColor(0xFF0F3460);
         bottomBar.setPadding(8,6,8,6);
 
-        Button btnMark = new Button(this);
+        btnMark = new Button(this);
         btnMark.setText("ISARETLEME");
         btnMark.setBackgroundColor(0xFF6A1B9A);
         btnMark.setTextColor(0xFFFFFFFF);
@@ -381,11 +416,11 @@ public class PdfViewerActivity extends AppCompatActivity {
             b.setTitle("Sayfaya Git");
             EditText input = new EditText(this);
             input.setInputType(InputType.TYPE_CLASS_NUMBER);
-            input.setHint("1 - " + totalPages);
+            input.setHint("1 - "+totalPages);
             b.setView(input);
-            b.setPositiveButton("Git", (d,w) -> {
+            b.setPositiveButton("Git",(d,w) -> {
                 try {
-                    int p = Integer.parseInt(input.getText().toString())-1;
+                    int p=Integer.parseInt(input.getText().toString())-1;
                     if (p>=0&&p<totalPages) showPage(p);
                     else Toast.makeText(this,"Gecersiz sayfa",Toast.LENGTH_SHORT).show();
                 } catch (Exception e) { Toast.makeText(this,"Sayi gir",Toast.LENGTH_SHORT).show(); }
@@ -394,20 +429,32 @@ public class PdfViewerActivity extends AppCompatActivity {
             b.show();
         });
 
-        // İşaretleme modu toggle
         btnMark.setOnClickListener(v -> {
             highlightMode = !highlightMode;
+            deleteMode = false;
             highlightColorBar.setVisibility(highlightMode ? View.VISIBLE : View.GONE);
             btnMark.setBackgroundColor(highlightMode ? 0xFFE94560 : 0xFF6A1B9A);
             btnMark.setText(highlightMode ? "BITTI" : "ISARETLEME");
         });
 
-        // Highlight sil butonu
-        btnHlDelete.setOnClickListener(v -> {
-            Toast.makeText(this, "Silmek icin isarete dokun", Toast.LENGTH_SHORT).show();
+        btnUndo.setOnClickListener(v -> {
+            if (highlightOverlay==null) return;
+            long id = highlightOverlay.undoLast();
+            if (id>0) {
+                db.delete("page_highlights","id=?",new String[]{String.valueOf(id)});
+                Toast.makeText(this,"Geri alindi",Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this,"Geri alinacak isaretleme yok",Toast.LENGTH_SHORT).show();
+            }
         });
 
-        // Not butonları
+        btnDelMode.setOnClickListener(v -> {
+            deleteMode = !deleteMode;
+            btnDelMode.setBackgroundColor(deleteMode ? 0xFFE94560 : 0xFF333333);
+            btnDelMode.setText(deleteMode ? "SIL (DOK)" : "SIL");
+            Toast.makeText(this, deleteMode ? "Silmek icin isarete dokun" : "Silme modu kapandi", Toast.LENGTH_SHORT).show();
+        });
+
         btnRed.setOnClickListener(v -> saveHighlight("red","ITIRAZ"));
         btnBlue.setOnClickListener(v -> saveHighlight("blue","ARGUMAN"));
         btnGreen.setOnClickListener(v -> saveHighlight("green","VERI"));
@@ -425,9 +472,19 @@ public class PdfViewerActivity extends AppCompatActivity {
     }
 
     private void setupTouch() {
-        // Overlay touch — highlight modu
         highlightOverlay.setOnTouchListener((v, event) -> {
             if (!highlightMode) return false;
+
+            if (deleteMode) {
+                if (event.getAction()==MotionEvent.ACTION_DOWN) {
+                    long id = highlightOverlay.removeTouched(event.getX(), event.getY());
+                    if (id>0) {
+                        db.delete("page_highlights","id=?",new String[]{String.valueOf(id)});
+                        Toast.makeText(this,"Silindi",Toast.LENGTH_SHORT).show();
+                    }
+                }
+                return true;
+            }
 
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -438,25 +495,25 @@ public class PdfViewerActivity extends AppCompatActivity {
                     return true;
                 case MotionEvent.ACTION_UP:
                     float[] rect = highlightOverlay.finishDraw();
-                    if (rect != null) {
-                        // Kaydet
+                    if (rect!=null) {
                         ContentValues values = new ContentValues();
-                        values.put("pdf_uri", pdfUri);
-                        values.put("page", currentPage);
-                        values.put("x1", rect[0]);
-                        values.put("y1", rect[1]);
-                        values.put("x2", rect[2]);
-                        values.put("y2", rect[3]);
-                        values.put("color", highlightColor);
-                        db.insert("page_highlights", null, values);
-                        Toast.makeText(this, "Isaretlendi", Toast.LENGTH_SHORT).show();
+                        values.put("pdf_uri",pdfUri);
+                        values.put("page",currentPage);
+                        values.put("x1",rect[0]);
+                        values.put("y1",rect[1]);
+                        values.put("x2",rect[2]);
+                        values.put("y2",rect[3]);
+                        values.put("color",highlightColor);
+                        long newId = db.insert("page_highlights",null,values);
+                        highlightOverlay.addHighlight(newId,rect[0],rect[1],rect[2],rect[3],highlightColor);
+                        // Yeni eklendi, undo için son öğeyi güncelle (addHighlight zaten ekliyor ama finishDraw da ekliyor — sadece DB'den yükle)
+                        loadPageHighlights(currentPage);
                     }
                     return true;
             }
             return false;
         });
 
-        // PageView touch — zoom+pan modu
         pageView.setOnTouchListener((v, event) -> {
             if (highlightMode) return false;
             scaleDetector.onTouchEvent(event);
@@ -464,26 +521,26 @@ public class PdfViewerActivity extends AppCompatActivity {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     savedMatrix.set(matrix);
-                    lastTouchX = event.getX();
-                    lastTouchY = event.getY();
-                    touchMode = TOUCH_DRAG;
+                    lastTouchX=event.getX();
+                    lastTouchY=event.getY();
+                    touchMode=TOUCH_DRAG;
                     break;
                 case MotionEvent.ACTION_POINTER_DOWN:
-                    touchMode = TOUCH_ZOOM;
+                    touchMode=TOUCH_ZOOM;
                     break;
                 case MotionEvent.ACTION_MOVE:
                     if (touchMode==TOUCH_DRAG && !scaleDetector.isInProgress()) {
-                        float dx = event.getX()-lastTouchX;
-                        float dy = event.getY()-lastTouchY;
+                        float dx=event.getX()-lastTouchX;
+                        float dy=event.getY()-lastTouchY;
                         matrix.set(savedMatrix);
-                        matrix.postTranslate(dx, dy);
+                        matrix.postTranslate(dx,dy);
                         clampMatrix();
                         pageView.setImageMatrix(matrix);
                     }
                     break;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_POINTER_UP:
-                    touchMode = TOUCH_NONE;
+                    touchMode=TOUCH_NONE;
                     break;
             }
             return true;
@@ -494,36 +551,24 @@ public class PdfViewerActivity extends AppCompatActivity {
         if (pageView.getDrawable()==null) return;
         float[] values = new float[9];
         matrix.getValues(values);
-        float scaleX = values[Matrix.MSCALE_X];
-        float transX = values[Matrix.MTRANS_X];
-        float transY = values[Matrix.MTRANS_Y];
-
-        int viewW = pageView.getWidth();
-        int viewH = pageView.getHeight();
-        float scaledW = imgWidth * scaleX;
-        float scaledH = imgHeight * scaleX;
+        float scaleX=values[Matrix.MSCALE_X];
+        float transX=values[Matrix.MTRANS_X];
+        float transY=values[Matrix.MTRANS_Y];
+        int viewW=pageView.getWidth();
+        int viewH=pageView.getHeight();
+        float scaledW=imgWidth*scaleX;
+        float scaledH=imgHeight*scaleX;
 
         float minTX, maxTX, minTY, maxTY;
+        if (scaledW<=viewW) { minTX=maxTX=(viewW-scaledW)/2f; }
+        else { minTX=viewW-scaledW; maxTX=0; }
+        if (scaledH<=viewH) { minTY=maxTY=(viewH-scaledH)/2f; }
+        else { minTY=viewH-scaledH; maxTY=0; }
 
-        if (scaledW <= viewW) {
-            minTX = maxTX = (viewW - scaledW) / 2f;
-        } else {
-            minTX = viewW - scaledW;
-            maxTX = 0;
-        }
-
-        if (scaledH <= viewH) {
-            minTY = maxTY = (viewH - scaledH) / 2f;
-        } else {
-            minTY = viewH - scaledH;
-            maxTY = 0;
-        }
-
-        transX = Math.max(minTX, Math.min(transX, maxTX));
-        transY = Math.max(minTY, Math.min(transY, maxTY));
-
-        values[Matrix.MTRANS_X] = transX;
-        values[Matrix.MTRANS_Y] = transY;
+        transX=Math.max(minTX,Math.min(transX,maxTX));
+        transY=Math.max(minTY,Math.min(transY,maxTY));
+        values[Matrix.MTRANS_X]=transX;
+        values[Matrix.MTRANS_Y]=transY;
         matrix.setValues(values);
     }
 
@@ -531,10 +576,10 @@ public class PdfViewerActivity extends AppCompatActivity {
         @Override public boolean onScale(ScaleGestureDetector detector) {
             float[] values = new float[9];
             matrix.getValues(values);
-            float currentScale = values[Matrix.MSCALE_X];
-            float newScale = Math.max(MIN_ZOOM, Math.min(currentScale*detector.getScaleFactor(), MAX_ZOOM));
-            float realScale = newScale/currentScale;
-            matrix.postScale(realScale, realScale, detector.getFocusX(), detector.getFocusY());
+            float cur=values[Matrix.MSCALE_X];
+            float newS=Math.max(MIN_ZOOM,Math.min(cur*detector.getScaleFactor(),MAX_ZOOM));
+            float real=newS/cur;
+            matrix.postScale(real,real,detector.getFocusX(),detector.getFocusY());
             clampMatrix();
             pageView.setImageMatrix(matrix);
             return true;
@@ -543,19 +588,19 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     private void openPdfFile(int startPage) {
         try {
-            fileDescriptor = getContentResolver().openFileDescriptor(Uri.parse(pdfUri),"r");
+            fileDescriptor=getContentResolver().openFileDescriptor(Uri.parse(pdfUri),"r");
             if (fileDescriptor==null) { Toast.makeText(this,"Dosya acilamadi",Toast.LENGTH_LONG).show(); finish(); return; }
-            pdfRenderer = new PdfRenderer(fileDescriptor);
-            totalPages = pdfRenderer.getPageCount();
-            showPage(Math.min(startPage, totalPages-1));
+            pdfRenderer=new PdfRenderer(fileDescriptor);
+            totalPages=pdfRenderer.getPageCount();
+            showPage(Math.min(startPage,totalPages-1));
         } catch (Exception e) { Toast.makeText(this,"PDF hatasi: "+e.getMessage(),Toast.LENGTH_LONG).show(); finish(); }
     }
 
     private void openTextFile() {
         try {
-            InputStream is = getContentResolver().openInputStream(Uri.parse(pdfUri));
-            BufferedReader reader = new BufferedReader(new InputStreamReader(is));
-            StringBuilder sb = new StringBuilder();
+            InputStream is=getContentResolver().openInputStream(Uri.parse(pdfUri));
+            BufferedReader reader=new BufferedReader(new InputStreamReader(is));
+            StringBuilder sb=new StringBuilder();
             String line;
             while ((line=reader.readLine())!=null) sb.append(line).append("\n");
             reader.close();
@@ -565,27 +610,29 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     private void showPage(int index) {
         if (pdfRenderer==null) return;
-        currentPage = index;
+        currentPage=index;
         matrix.reset();
         pageView.setImageMatrix(matrix);
 
+        // Overlay temizle — yeni sayfa yüklenirken eski sayfanın highlight'ları görünmesin
+        if (highlightOverlay!=null) highlightOverlay.loadHighlights(new ArrayList<>(), new ArrayList<>());
+
         try {
-            PdfRenderer.Page page = pdfRenderer.openPage(index);
-            int w = getResources().getDisplayMetrics().widthPixels;
-            int h = (int)((float)page.getHeight()/page.getWidth()*w);
+            PdfRenderer.Page page=pdfRenderer.openPage(index);
+            int w=getResources().getDisplayMetrics().widthPixels;
+            int h=(int)((float)page.getHeight()/page.getWidth()*w);
             imgWidth=w; imgHeight=h;
-            Bitmap bitmap = Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
-            Canvas canvas = new Canvas(bitmap);
+            Bitmap bitmap=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
+            Canvas canvas=new Canvas(bitmap);
             canvas.drawColor(Color.WHITE);
             page.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
             page.close();
             pageView.setImageBitmap(bitmap);
             pageInfo.setText((index+1)+" / "+totalPages);
 
-            // Highlight'ları yükle
             loadPageHighlights(index);
 
-            ContentValues values = new ContentValues();
+            ContentValues values=new ContentValues();
             values.put("pdf_uri",pdfUri);
             values.put("last_page",index);
             values.put("last_opened",new java.util.Date().toString());
@@ -595,60 +642,59 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     private void loadPageHighlights(int page) {
         if (highlightOverlay==null) return;
-        List<float[]> list = new ArrayList<>();
-        Cursor c = db.rawQuery(
-            "SELECT x1,y1,x2,y2,color FROM page_highlights WHERE pdf_uri=? AND page=?",
-            new String[]{pdfUri, String.valueOf(page)});
+        List<long[]> ids=new ArrayList<>();
+        List<float[]> rects=new ArrayList<>();
+        Cursor c=db.rawQuery(
+            "SELECT id,x1,y1,x2,y2,color FROM page_highlights WHERE pdf_uri=? AND page=? ORDER BY id ASC",
+            new String[]{pdfUri,String.valueOf(page)});
         while (c.moveToNext()) {
-            float x1=c.getFloat(0), y1=c.getFloat(1), x2=c.getFloat(2), y2=c.getFloat(3);
-            String color = c.getString(4);
-            float colorFloat;
+            long id=c.getLong(0);
+            float x1=c.getFloat(1),y1=c.getFloat(2),x2=c.getFloat(3),y2=c.getFloat(4);
+            String color=c.getString(5);
+            float cf;
             switch(color!=null?color:"yellow") {
-                case "red": colorFloat=1; break;
-                case "blue": colorFloat=2; break;
-                case "green": colorFloat=3; break;
-                default: colorFloat=0;
+                case "red": cf=1; break;
+                case "blue": cf=2; break;
+                case "green": cf=3; break;
+                default: cf=0;
             }
-            list.add(new float[]{x1,y1,x2,y2,colorFloat});
+            ids.add(new long[]{id});
+            rects.add(new float[]{x1,y1,x2,y2,cf});
         }
         c.close();
-        highlightOverlay.loadHighlights(list);
+        highlightOverlay.loadHighlights(ids,rects);
     }
 
     private void saveHighlight(String color, String label) {
-        AlertDialog.Builder b = new AlertDialog.Builder(this);
+        AlertDialog.Builder b=new AlertDialog.Builder(this);
         b.setTitle(label+" — Sayfa "+(currentPage+1));
-
-        LinearLayout layout = new LinearLayout(this);
+        LinearLayout layout=new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(32,16,32,8);
-
-        EditText input = new EditText(this);
+        EditText input=new EditText(this);
         input.setHint("Notunu yaz...");
         input.setMinLines(2);
         layout.addView(input);
-
-        TextView tagLabel = new TextView(this);
+        TextView tagLabel=new TextView(this);
         tagLabel.setText("Etiket (istege bagli):");
         tagLabel.setTextColor(0xFF888888);
         tagLabel.setTextSize(12);
         tagLabel.setPadding(0,16,0,8);
         layout.addView(tagLabel);
-
-        HorizontalScrollView hs = new HorizontalScrollView(this);
-        LinearLayout tagRow = new LinearLayout(this);
+        HorizontalScrollView hs=new HorizontalScrollView(this);
+        LinearLayout tagRow=new LinearLayout(this);
         tagRow.setOrientation(LinearLayout.HORIZONTAL);
-        final String[] selTag = {""};
-        Button[] tagBtns = new Button[TAGS.size()];
-        for (int i=0; i<TAGS.size(); i++) {
-            String t = TAGS.get(i);
-            Button tb = new Button(this);
+        final String[] selTag={""};
+        Button[] tagBtns=new Button[TAGS.size()];
+        for (int i=0;i<TAGS.size();i++) {
+            String t=TAGS.get(i);
+            Button tb=new Button(this);
             tb.setText(t);
             tb.setTextSize(10);
             tb.setTextColor(0xFFFFFFFF);
             tb.setBackgroundColor(0x446A1B9A);
             tb.setPadding(16,6,16,6);
-            LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,ViewGroup.LayoutParams.WRAP_CONTENT);
             tp.setMargins(4,0,4,0);
             tb.setLayoutParams(tp);
             tagBtns[i]=tb;
@@ -663,7 +709,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         layout.addView(hs);
         b.setView(layout);
         b.setPositiveButton("Kaydet",(d,w) -> {
-            ContentValues values = new ContentValues();
+            ContentValues values=new ContentValues();
             values.put("pdf_uri",pdfUri);
             values.put("page",currentPage);
             values.put("color",color);
