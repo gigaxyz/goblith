@@ -1,10 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
-
     <application
         android:allowBackup="true"
         android:label="Goblith"
@@ -12,20 +10,18 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@style/AppTheme"
         android:supportsRtl="true">
-
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-
         <activity android:name=".PdfViewerActivity" android:exported="false"/>
         <activity android:name=".NotesActivity" android:exported="false"/>
         <activity android:name=".WordAnalysisActivity" android:exported="false"/>
         <activity android:name=".StatsActivity" android:exported="false"/>
         <activity android:name=".CrossRefActivity" android:exported="false"/>
-
+        <activity android:name=".FlashcardActivity" android:exported="false"/>
+        <activity android:name=".ReadingListActivity" android:exported="false"/>
     </application>
-
 </manifest>
