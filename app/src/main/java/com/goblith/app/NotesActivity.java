@@ -34,16 +34,14 @@ public class NotesActivity extends AppCompatActivity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xFF1A1A2E);
 
-        // Başlık
         TextView title = new TextView(this);
-        title.setText("📚 Alıntı Bankası");
+        title.setText("Alinti Bankasi");
         title.setTextColor(0xFFE94560);
         title.setTextSize(22);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
         title.setPadding(24, 32, 24, 8);
         root.addView(title);
 
-        // Arama kutusu
         EditText searchBox = new EditText(this);
         searchBox.setHint("Notlarda ara...");
         searchBox.setHintTextColor(0xFF888888);
@@ -56,7 +54,6 @@ public class NotesActivity extends AppCompatActivity {
         searchBox.setLayoutParams(searchParams);
         root.addView(searchBox);
 
-        // Notlar listesi
         ScrollView scrollView = new ScrollView(this);
         notesContainer = new LinearLayout(this);
         notesContainer.setOrientation(LinearLayout.VERTICAL);
@@ -69,16 +66,13 @@ public class NotesActivity extends AppCompatActivity {
 
         searchBox.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
-            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {
-                loadNotes(s.toString());
-            }
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) { loadNotes(s.toString()); }
             @Override public void afterTextChanged(Editable s) {}
         });
     }
 
     private void loadNotes(String query) {
         notesContainer.removeAllViews();
-
         Cursor cursor;
         if (query.isEmpty()) {
             cursor = db.rawQuery("SELECT * FROM highlights ORDER BY created_at DESC", null);
@@ -89,7 +83,7 @@ public class NotesActivity extends AppCompatActivity {
 
         if (cursor.getCount() == 0) {
             TextView empty = new TextView(this);
-            empty.setText("Henüz not yok.\nPDF okurken 🔴🔵🟢 butonlarıyla not ekle.");
+            empty.setText("Henuz not yok.\nPDF okurken kategori butonlariyla not ekle.");
             empty.setTextColor(0xFF888888);
             empty.setTextSize(14);
             empty.setGravity(Gravity.CENTER);
@@ -106,15 +100,14 @@ public class NotesActivity extends AppCompatActivity {
             String note = cursor.getString(cursor.getColumnIndexOrThrow("note"));
             String date = cursor.getString(cursor.getColumnIndexOrThrow("created_at"));
 
-            String emoji, label;
+            String label;
             int borderColor;
             switch (color) {
-                case "red":  emoji = "🔴"; label = "İtiraz";  borderColor = 0xFFE94560; break;
-                case "blue": emoji = "🔵"; label = "Argüman"; borderColor = 0xFF1565C0; break;
-                default:     emoji = "🟢"; label = "Veri";    borderColor = 0xFF2E7D32; break;
+                case "red":  label = "ITIRAZ";   borderColor = 0xFFE94560; break;
+                case "blue": label = "ARGUMAN";  borderColor = 0xFF1565C0; break;
+                default:     label = "VERI";     borderColor = 0xFF2E7D32; break;
             }
 
-            // Kart
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setBackgroundColor(0xFF16213E);
@@ -124,41 +117,39 @@ public class NotesActivity extends AppCompatActivity {
             cardParams.setMargins(0, 0, 0, 12);
             card.setLayoutParams(cardParams);
 
-            // Üst satır: etiket + butonlar
             LinearLayout topRow = new LinearLayout(this);
             topRow.setOrientation(LinearLayout.HORIZONTAL);
             topRow.setGravity(Gravity.CENTER_VERTICAL);
 
             TextView labelView = new TextView(this);
-            labelView.setText(emoji + " " + label + "  •  Sayfa " + (page + 1));
+            labelView.setText(label + "  |  Sayfa " + (page + 1));
             labelView.setTextColor(borderColor);
-            labelView.setTextSize(12);
+            labelView.setTextSize(11);
             labelView.setTypeface(null, android.graphics.Typeface.BOLD);
-            LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
-            labelView.setLayoutParams(labelParams);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+            labelView.setLayoutParams(lp);
             topRow.addView(labelView);
 
-            // Düzenle butonu
             Button btnEdit = new Button(this);
-            btnEdit.setText("✏️");
-            btnEdit.setBackgroundColor(0x00000000);
-            btnEdit.setTextColor(0xFFAAAAAA);
-            btnEdit.setTextSize(16);
-            btnEdit.setPadding(8, 0, 8, 0);
+            btnEdit.setText("Duzenle");
+            btnEdit.setBackgroundColor(0xFF0F3460);
+            btnEdit.setTextColor(0xFFFFFFFF);
+            btnEdit.setTextSize(11);
+            btnEdit.setPadding(16, 4, 16, 4);
             topRow.addView(btnEdit);
 
-            // Sil butonu
             Button btnDelete = new Button(this);
-            btnDelete.setText("🗑️");
-            btnDelete.setBackgroundColor(0x00000000);
-            btnDelete.setTextColor(0xFFAAAAAA);
-            btnDelete.setTextSize(16);
-            btnDelete.setPadding(8, 0, 8, 0);
+            btnDelete.setText("Sil");
+            btnDelete.setBackgroundColor(0xFFE94560);
+            btnDelete.setTextColor(0xFFFFFFFF);
+            btnDelete.setTextSize(11);
+            btnDelete.setPadding(16, 4, 16, 4);
+            LinearLayout.LayoutParams dp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            dp.setMargins(8, 0, 0, 0);
+            btnDelete.setLayoutParams(dp);
             topRow.addView(btnDelete);
-
             card.addView(topRow);
 
-            // Not metni
             if (note != null && !note.isEmpty()) {
                 TextView noteView = new TextView(this);
                 noteView.setText(note);
@@ -168,28 +159,25 @@ public class NotesActivity extends AppCompatActivity {
                 card.addView(noteView);
             }
 
-            // Tarih
             TextView dateView = new TextView(this);
-            dateView.setText(date != null ? date.substring(0, 10) : "");
+            dateView.setText(date != null && date.length() >= 10 ? date.substring(0, 10) : "");
             dateView.setTextColor(0xFF555555);
             dateView.setTextSize(11);
             card.addView(dateView);
 
             notesContainer.addView(card);
 
-            // Düzenle
             final int noteId = id;
             final String currentNote = note;
             final String currentColor = color;
+
             btnEdit.setOnClickListener(v -> {
                 AlertDialog.Builder builder = new AlertDialog.Builder(this);
-                builder.setTitle("Notu Düzenle");
-
+                builder.setTitle("Notu Duzenle");
                 LinearLayout editLayout = new LinearLayout(this);
                 editLayout.setOrientation(LinearLayout.VERTICAL);
                 editLayout.setPadding(32, 16, 32, 16);
 
-                // Renk seçimi
                 TextView colorLabel = new TextView(this);
                 colorLabel.setText("Kategori:");
                 colorLabel.setTextColor(0xFF888888);
@@ -198,36 +186,35 @@ public class NotesActivity extends AppCompatActivity {
                 LinearLayout colorRow = new LinearLayout(this);
                 colorRow.setOrientation(LinearLayout.HORIZONTAL);
                 colorRow.setPadding(0, 8, 0, 16);
-                final String[] selectedColor = {currentColor};
+                final String[] sel = {currentColor};
 
                 Button bRed = new Button(this);
-                bRed.setText("🔴 İtiraz");
+                bRed.setText("ITIRAZ");
                 bRed.setBackgroundColor(currentColor.equals("red") ? 0xFFE94560 : 0x44E94560);
                 bRed.setTextColor(0xFFFFFFFF);
                 bRed.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
                 Button bBlue = new Button(this);
-                bBlue.setText("🔵 Argüman");
+                bBlue.setText("ARGUMAN");
                 bBlue.setBackgroundColor(currentColor.equals("blue") ? 0xFF1565C0 : 0x441565C0);
                 bBlue.setTextColor(0xFFFFFFFF);
                 bBlue.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
                 Button bGreen = new Button(this);
-                bGreen.setText("🟢 Veri");
+                bGreen.setText("VERI");
                 bGreen.setBackgroundColor(currentColor.equals("green") ? 0xFF2E7D32 : 0x442E7D32);
                 bGreen.setTextColor(0xFFFFFFFF);
                 bGreen.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
 
-                bRed.setOnClickListener(cv -> { selectedColor[0] = "red"; bRed.setBackgroundColor(0xFFE94560); bBlue.setBackgroundColor(0x441565C0); bGreen.setBackgroundColor(0x442E7D32); });
-                bBlue.setOnClickListener(cv -> { selectedColor[0] = "blue"; bBlue.setBackgroundColor(0xFF1565C0); bRed.setBackgroundColor(0x44E94560); bGreen.setBackgroundColor(0x442E7D32); });
-                bGreen.setOnClickListener(cv -> { selectedColor[0] = "green"; bGreen.setBackgroundColor(0xFF2E7D32); bRed.setBackgroundColor(0x44E94560); bBlue.setBackgroundColor(0x441565C0); });
+                bRed.setOnClickListener(cv -> { sel[0]="red"; bRed.setBackgroundColor(0xFFE94560); bBlue.setBackgroundColor(0x441565C0); bGreen.setBackgroundColor(0x442E7D32); });
+                bBlue.setOnClickListener(cv -> { sel[0]="blue"; bBlue.setBackgroundColor(0xFF1565C0); bRed.setBackgroundColor(0x44E94560); bGreen.setBackgroundColor(0x442E7D32); });
+                bGreen.setOnClickListener(cv -> { sel[0]="green"; bGreen.setBackgroundColor(0xFF2E7D32); bRed.setBackgroundColor(0x44E94560); bBlue.setBackgroundColor(0x441565C0); });
 
                 colorRow.addView(bRed);
                 colorRow.addView(bBlue);
                 colorRow.addView(bGreen);
                 editLayout.addView(colorRow);
 
-                // Not alanı
                 EditText editInput = new EditText(this);
                 editInput.setText(currentNote);
                 editInput.setTextColor(0xFF000000);
@@ -240,41 +227,40 @@ public class NotesActivity extends AppCompatActivity {
                 builder.setPositiveButton("Kaydet", (d, w) -> {
                     ContentValues values = new ContentValues();
                     values.put("note", editInput.getText().toString());
-                    values.put("color", selectedColor[0]);
+                    values.put("color", sel[0]);
                     db.update("highlights", values, "id=?", new String[]{String.valueOf(noteId)});
-                    Toast.makeText(this, "Güncellendi ✓", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Guncellendi", Toast.LENGTH_SHORT).show();
                     loadNotes("");
                 });
-                builder.setNegativeButton("İptal", null);
+                builder.setNegativeButton("Iptal", null);
                 builder.show();
             });
 
-            // Sil
-            btnDelete.setOnClickListener(v -> {
-                new AlertDialog.Builder(this)
-                    .setTitle("Notu Sil")
-                    .setMessage("Bu notu silmek istediğine emin misin?")
-                    .setPositiveButton("Sil", (d, w) -> {
-                        db.delete("highlights", "id=?", new String[]{String.valueOf(noteId)});
-                        Toast.makeText(this, "Silindi", Toast.LENGTH_SHORT).show();
-                        loadNotes("");
-                    })
-                    .setNegativeButton("İptal", null)
-                    .show();
-            });
+            btnDelete.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("Notu Sil")
+                .setMessage("Bu notu silmek istedigine emin misin?")
+                .setPositiveButton("Sil", (d, w) -> {
+                    db.delete("highlights", "id=?", new String[]{String.valueOf(noteId)});
+                    Toast.makeText(this, "Silindi", Toast.LENGTH_SHORT).show();
+                    loadNotes("");
+                })
+                .setNegativeButton("Iptal", null)
+                .show());
         }
         cursor.close();
     }
 
     class DBHelper extends SQLiteOpenHelper {
-        DBHelper() {
-            super(NotesActivity.this, "goblith.db", null, 1);
-        }
+        DBHelper() { super(NotesActivity.this, "goblith.db", null, 2); }
         @Override
         public void onCreate(SQLiteDatabase db) {
             db.execSQL("CREATE TABLE IF NOT EXISTS highlights (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, color TEXT, note TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
+            db.execSQL("CREATE TABLE IF NOT EXISTS library (pdf_uri TEXT PRIMARY KEY, custom_name TEXT, last_page INTEGER DEFAULT 0, last_opened TEXT)");
         }
         @Override
-        public void onUpgrade(SQLiteDatabase db, int o, int n) {}
+        public void onUpgrade(SQLiteDatabase db, int o, int n) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS library (pdf_uri TEXT PRIMARY KEY, custom_name TEXT, last_page INTEGER DEFAULT 0, last_opened TEXT)");
+            try { db.execSQL("ALTER TABLE library ADD COLUMN custom_name TEXT"); } catch (Exception e) {}
+        }
     }
 }
