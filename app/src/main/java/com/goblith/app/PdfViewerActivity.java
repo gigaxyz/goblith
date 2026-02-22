@@ -13,7 +13,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.ParcelFileDescriptor;
 import android.text.InputType;
-import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
@@ -21,6 +20,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -32,6 +32,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.Arrays;
+import java.util.List;
 
 public class PdfViewerActivity extends AppCompatActivity {
 
@@ -46,20 +48,20 @@ public class PdfViewerActivity extends AppCompatActivity {
     private String pdfUri;
     private String fileType;
 
-    // Zoom + Pan
     private Matrix matrix = new Matrix();
     private Matrix savedMatrix = new Matrix();
-    private float scaleFactor = 1.0f;
-    private static final float MIN_ZOOM = 1.0f;
-    private static final float MAX_ZOOM = 5.0f;
     private ScaleGestureDetector scaleDetector;
     private float lastTouchX, lastTouchY;
-    private static final int TOUCH_NONE = 0, TOUCH_DRAG = 1, TOUCH_ZOOM = 2;
+    private static final int TOUCH_NONE=0, TOUCH_DRAG=1, TOUCH_ZOOM=2;
     private int touchMode = TOUCH_NONE;
+    private static final float MIN_ZOOM=1.0f, MAX_ZOOM=5.0f;
 
-    // Hızlı geçiş
     private Handler fastScrollHandler = new Handler();
     private boolean isFastScrolling = false;
+
+    private static final List<String> TAGS = Arrays.asList(
+        "Felsefe","Ekonomi","Strateji","Bilim","Tarih","Psikoloji","Diger"
+    );
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -116,7 +118,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         topBar.addView(btnGo);
         topBar.addView(btnNext);
 
-        // İçerik alanı
+        // İçerik
         FrameLayout contentArea = new FrameLayout(this);
         contentArea.setLayoutParams(new LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
@@ -145,7 +147,7 @@ public class PdfViewerActivity extends AppCompatActivity {
             setupZoomPan();
         }
 
-        // Alt butonlar
+        // Alt bar
         LinearLayout bottomBar = new LinearLayout(this);
         bottomBar.setOrientation(LinearLayout.HORIZONTAL);
         bottomBar.setBackgroundColor(0xFF0F3460);
@@ -184,38 +186,27 @@ public class PdfViewerActivity extends AppCompatActivity {
         root.addView(bottomBar);
         setContentView(root);
 
-        // Dosyayı aç
-        if (fileType.equals("TXT")) {
-            openTextFile();
-        } else {
-            openPdfFile(startPage);
-        }
+        if (fileType.equals("TXT")) openTextFile();
+        else openPdfFile(startPage);
 
-        // Buton olayları
         btnPrev.setOnClickListener(v -> { if (currentPage > 0) showPage(currentPage - 1); });
         btnNext.setOnClickListener(v -> { if (currentPage < totalPages - 1) showPage(currentPage + 1); });
 
         Runnable fastPrev = new Runnable() {
             @Override public void run() {
-                if (isFastScrolling && currentPage > 0) {
-                    showPage(currentPage - 1);
-                    fastScrollHandler.postDelayed(this, 120);
-                }
+                if (isFastScrolling && currentPage > 0) { showPage(currentPage-1); fastScrollHandler.postDelayed(this, 120); }
             }
         };
         Runnable fastNext = new Runnable() {
             @Override public void run() {
-                if (isFastScrolling && currentPage < totalPages - 1) {
-                    showPage(currentPage + 1);
-                    fastScrollHandler.postDelayed(this, 120);
-                }
+                if (isFastScrolling && currentPage < totalPages-1) { showPage(currentPage+1); fastScrollHandler.postDelayed(this, 120); }
             }
         };
 
-        btnPrev.setOnLongClickListener(v -> { isFastScrolling = true; fastScrollHandler.post(fastPrev); return true; });
-        btnNext.setOnLongClickListener(v -> { isFastScrolling = true; fastScrollHandler.post(fastNext); return true; });
-        btnPrev.setOnTouchListener((v, e) -> { if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) isFastScrolling = false; return false; });
-        btnNext.setOnTouchListener((v, e) -> { if (e.getAction() == MotionEvent.ACTION_UP || e.getAction() == MotionEvent.ACTION_CANCEL) isFastScrolling = false; return false; });
+        btnPrev.setOnLongClickListener(v -> { isFastScrolling=true; fastScrollHandler.post(fastPrev); return true; });
+        btnNext.setOnLongClickListener(v -> { isFastScrolling=true; fastScrollHandler.post(fastNext); return true; });
+        btnPrev.setOnTouchListener((v,e) -> { if (e.getAction()==MotionEvent.ACTION_UP||e.getAction()==MotionEvent.ACTION_CANCEL) isFastScrolling=false; return false; });
+        btnNext.setOnTouchListener((v,e) -> { if (e.getAction()==MotionEvent.ACTION_UP||e.getAction()==MotionEvent.ACTION_CANCEL) isFastScrolling=false; return false; });
 
         btnGo.setOnClickListener(v -> {
             if (fileType.equals("TXT")) return;
@@ -225,12 +216,12 @@ public class PdfViewerActivity extends AppCompatActivity {
             input.setInputType(InputType.TYPE_CLASS_NUMBER);
             input.setHint("1 - " + totalPages);
             b.setView(input);
-            b.setPositiveButton("Git", (d, w) -> {
+            b.setPositiveButton("Git", (d,w) -> {
                 try {
                     int p = Integer.parseInt(input.getText().toString()) - 1;
-                    if (p >= 0 && p < totalPages) showPage(p);
-                    else Toast.makeText(this, "Gecersiz sayfa", Toast.LENGTH_SHORT).show();
-                } catch (Exception e) { Toast.makeText(this, "Sayi gir", Toast.LENGTH_SHORT).show(); }
+                    if (p>=0 && p<totalPages) showPage(p);
+                    else Toast.makeText(this,"Gecersiz sayfa",Toast.LENGTH_SHORT).show();
+                } catch (Exception e) { Toast.makeText(this,"Sayi gir",Toast.LENGTH_SHORT).show(); }
             });
             b.setNegativeButton("Iptal", null);
             b.show();
@@ -241,10 +232,74 @@ public class PdfViewerActivity extends AppCompatActivity {
         btnGreen.setOnClickListener(v -> saveHighlight("green", "VERI"));
     }
 
+    private void saveHighlight(String color, String label) {
+        AlertDialog.Builder b = new AlertDialog.Builder(this);
+        b.setTitle(label + " — Sayfa " + (currentPage+1));
+
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(32, 16, 32, 8);
+
+        EditText input = new EditText(this);
+        input.setHint("Notunu yaz...");
+        input.setMinLines(2);
+        layout.addView(input);
+
+        // Etiket seçimi
+        TextView tagLabel = new TextView(this);
+        tagLabel.setText("Etiket sec (istege bagli):");
+        tagLabel.setTextColor(0xFF888888);
+        tagLabel.setTextSize(12);
+        tagLabel.setPadding(0, 16, 0, 8);
+        layout.addView(tagLabel);
+
+        HorizontalScrollView hs = new HorizontalScrollView(this);
+        LinearLayout tagRow = new LinearLayout(this);
+        tagRow.setOrientation(LinearLayout.HORIZONTAL);
+        final String[] selTag = {""};
+        Button[] tagBtns = new Button[TAGS.size()];
+
+        for (int i = 0; i < TAGS.size(); i++) {
+            String t = TAGS.get(i);
+            Button tb = new Button(this);
+            tb.setText(t);
+            tb.setTextSize(10);
+            tb.setTextColor(0xFFFFFFFF);
+            tb.setBackgroundColor(0x446A1B9A);
+            tb.setPadding(16, 6, 16, 6);
+            LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            tp.setMargins(4, 0, 4, 0);
+            tb.setLayoutParams(tp);
+            tagBtns[i] = tb;
+            tagRow.addView(tb);
+            final int idx = i;
+            tb.setOnClickListener(cv -> {
+                selTag[0] = t;
+                for (int j=0; j<tagBtns.length; j++) tagBtns[j].setBackgroundColor(j==idx ? 0xFF6A1B9A : 0x446A1B9A);
+            });
+        }
+        hs.addView(tagRow);
+        layout.addView(hs);
+
+        b.setView(layout);
+        b.setPositiveButton("Kaydet", (d,w) -> {
+            ContentValues values = new ContentValues();
+            values.put("pdf_uri", pdfUri);
+            values.put("page", currentPage);
+            values.put("color", color);
+            values.put("note", input.getText().toString());
+            values.put("tag", selTag[0]);
+            db.insert("highlights", null, values);
+            Toast.makeText(this, "Kaydedildi", Toast.LENGTH_SHORT).show();
+        });
+        b.setNegativeButton("Iptal", null);
+        b.show();
+    }
+
     private void setupZoomPan() {
         pageView.setOnTouchListener((v, event) -> {
             scaleDetector.onTouchEvent(event);
-
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     savedMatrix.set(matrix);
@@ -252,11 +307,9 @@ public class PdfViewerActivity extends AppCompatActivity {
                     lastTouchY = event.getY();
                     touchMode = TOUCH_DRAG;
                     break;
-
                 case MotionEvent.ACTION_POINTER_DOWN:
                     touchMode = TOUCH_ZOOM;
                     break;
-
                 case MotionEvent.ACTION_MOVE:
                     if (touchMode == TOUCH_DRAG && !scaleDetector.isInProgress()) {
                         float dx = event.getX() - lastTouchX;
@@ -267,7 +320,6 @@ public class PdfViewerActivity extends AppCompatActivity {
                         pageView.setImageMatrix(matrix);
                     }
                     break;
-
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_POINTER_UP:
                     touchMode = TOUCH_NONE;
@@ -284,35 +336,27 @@ public class PdfViewerActivity extends AppCompatActivity {
         float scaleX = values[Matrix.MSCALE_X];
         float transX = values[Matrix.MTRANS_X];
         float transY = values[Matrix.MTRANS_Y];
-
         int viewW = pageView.getWidth();
         int viewH = pageView.getHeight();
         int imgW = pageView.getDrawable().getIntrinsicWidth();
         int imgH = pageView.getDrawable().getIntrinsicHeight();
-
         float scaledW = imgW * scaleX;
         float scaledH = imgH * scaleX;
-
-        float maxTransX = Math.max(0, (scaledW - viewW) / 2);
-        float maxTransY = Math.max(0, (scaledH - viewH) / 2);
-
-        transX = Math.max(-maxTransX, Math.min(transX, maxTransX));
-        transY = Math.max(-maxTransY, Math.min(transY, maxTransY));
-
+        float maxTX = Math.max(0, (scaledW - viewW) / 2);
+        float maxTY = Math.max(0, (scaledH - viewH) / 2);
+        transX = Math.max(-maxTX, Math.min(transX, maxTX));
+        transY = Math.max(-maxTY, Math.min(transY, maxTY));
         values[Matrix.MTRANS_X] = transX;
         values[Matrix.MTRANS_Y] = transY;
         matrix.setValues(values);
     }
 
     private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
-        @Override
-        public boolean onScale(ScaleGestureDetector detector) {
-            float scale = detector.getScaleFactor();
+        @Override public boolean onScale(ScaleGestureDetector detector) {
             float[] values = new float[9];
             matrix.getValues(values);
             float currentScale = values[Matrix.MSCALE_X];
-            float newScale = currentScale * scale;
-            newScale = Math.max(MIN_ZOOM, Math.min(newScale, MAX_ZOOM));
+            float newScale = Math.max(MIN_ZOOM, Math.min(currentScale * detector.getScaleFactor(), MAX_ZOOM));
             float realScale = newScale / currentScale;
             matrix.postScale(realScale, realScale, detector.getFocusX(), detector.getFocusY());
             clampMatrix();
@@ -324,14 +368,11 @@ public class PdfViewerActivity extends AppCompatActivity {
     private void openPdfFile(int startPage) {
         try {
             fileDescriptor = getContentResolver().openFileDescriptor(Uri.parse(pdfUri), "r");
-            if (fileDescriptor == null) { Toast.makeText(this, "Dosya acilamadi", Toast.LENGTH_LONG).show(); finish(); return; }
+            if (fileDescriptor == null) { Toast.makeText(this,"Dosya acilamadi",Toast.LENGTH_LONG).show(); finish(); return; }
             pdfRenderer = new PdfRenderer(fileDescriptor);
             totalPages = pdfRenderer.getPageCount();
-            showPage(Math.min(startPage, totalPages - 1));
-        } catch (Exception e) {
-            Toast.makeText(this, "PDF hatasi: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            finish();
-        }
+            showPage(Math.min(startPage, totalPages-1));
+        } catch (Exception e) { Toast.makeText(this,"PDF hatasi: "+e.getMessage(),Toast.LENGTH_LONG).show(); finish(); }
     }
 
     private void openTextFile() {
@@ -340,22 +381,17 @@ public class PdfViewerActivity extends AppCompatActivity {
             BufferedReader reader = new BufferedReader(new InputStreamReader(is));
             StringBuilder sb = new StringBuilder();
             String line;
-            while ((line = reader.readLine()) != null) sb.append(line).append("\n");
+            while ((line=reader.readLine())!=null) sb.append(line).append("\n");
             reader.close();
             txtContent.setText(sb.toString());
-        } catch (Exception e) {
-            Toast.makeText(this, "Dosya okunamadi", Toast.LENGTH_LONG).show();
-        }
+        } catch (Exception e) { Toast.makeText(this,"Dosya okunamadi",Toast.LENGTH_LONG).show(); }
     }
 
     private void showPage(int index) {
         if (pdfRenderer == null) return;
         currentPage = index;
-
-        // Zoom sıfırla
         matrix.reset();
         pageView.setImageMatrix(matrix);
-
         try {
             PdfRenderer.Page page = pdfRenderer.openPage(index);
             int w = getResources().getDisplayMetrics().widthPixels;
@@ -366,51 +402,29 @@ public class PdfViewerActivity extends AppCompatActivity {
             page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
             page.close();
             pageView.setImageBitmap(bitmap);
-            pageInfo.setText((index + 1) + " / " + totalPages);
-
+            pageInfo.setText((index+1) + " / " + totalPages);
             ContentValues values = new ContentValues();
             values.put("pdf_uri", pdfUri);
             values.put("last_page", index);
             values.put("last_opened", new java.util.Date().toString());
             db.insertWithOnConflict("library", null, values, SQLiteDatabase.CONFLICT_REPLACE);
-        } catch (Exception e) {
-            Toast.makeText(this, "Sayfa yuklenemedi", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void saveHighlight(String color, String label) {
-        AlertDialog.Builder b = new AlertDialog.Builder(this);
-        b.setTitle(label + " — Sayfa " + (currentPage + 1));
-        EditText input = new EditText(this);
-        input.setHint("Notunu yaz...");
-        b.setView(input);
-        b.setPositiveButton("Kaydet", (d, w) -> {
-            ContentValues values = new ContentValues();
-            values.put("pdf_uri", pdfUri);
-            values.put("page", currentPage);
-            values.put("color", color);
-            values.put("note", input.getText().toString());
-            db.insert("highlights", null, values);
-            Toast.makeText(this, "Kaydedildi", Toast.LENGTH_SHORT).show();
-        });
-        b.setNegativeButton("Iptal", null);
-        b.show();
+        } catch (Exception e) { Toast.makeText(this,"Sayfa yuklenemedi",Toast.LENGTH_SHORT).show(); }
     }
 
     class DBHelper extends SQLiteOpenHelper {
-        DBHelper() { super(PdfViewerActivity.this, "goblith.db", null, 3); }
+        DBHelper() { super(PdfViewerActivity.this, "goblith.db", null, 4); }
         @Override public void onCreate(SQLiteDatabase db) {
-            db.execSQL("CREATE TABLE IF NOT EXISTS highlights (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, color TEXT, note TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
+            db.execSQL("CREATE TABLE IF NOT EXISTS highlights (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, color TEXT, note TEXT, tag TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
             db.execSQL("CREATE TABLE IF NOT EXISTS library (pdf_uri TEXT PRIMARY KEY, custom_name TEXT, file_type TEXT DEFAULT 'PDF', last_page INTEGER DEFAULT 0, last_opened TEXT)");
         }
         @Override public void onUpgrade(SQLiteDatabase db, int o, int n) {
+            try { db.execSQL("ALTER TABLE highlights ADD COLUMN tag TEXT"); } catch (Exception e) {}
             try { db.execSQL("ALTER TABLE library ADD COLUMN custom_name TEXT"); } catch (Exception e) {}
             try { db.execSQL("ALTER TABLE library ADD COLUMN file_type TEXT DEFAULT 'PDF'"); } catch (Exception e) {}
         }
     }
 
-    @Override
-    protected void onDestroy() {
+    @Override protected void onDestroy() {
         super.onDestroy();
         isFastScrolling = false;
         fastScrollHandler.removeCallbacksAndMessages(null);

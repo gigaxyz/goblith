@@ -349,7 +349,7 @@ public class WordAnalysisActivity extends AppCompatActivity {
     }
 
     class DBHelper extends SQLiteOpenHelper {
-        DBHelper() { super(WordAnalysisActivity.this, "goblith.db", null, 3); }
+        DBHelper() { super(WordAnalysisActivity.this, "goblith.db", null, 4); }
         @Override public void onCreate(SQLiteDatabase db) {
             db.execSQL("CREATE TABLE IF NOT EXISTS highlights (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, color TEXT, note TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
             db.execSQL("CREATE TABLE IF NOT EXISTS library (pdf_uri TEXT PRIMARY KEY, custom_name TEXT, file_type TEXT DEFAULT 'PDF', last_page INTEGER DEFAULT 0, last_opened TEXT)");
