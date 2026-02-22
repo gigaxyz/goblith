@@ -27,15 +27,14 @@ public class NotesActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        DBHelper dbHelper = new DBHelper();
-        db = dbHelper.getWritableDatabase();
+        db = new DBHelper().getWritableDatabase();
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xFF1A1A2E);
 
         TextView title = new TextView(this);
-        title.setText("Alinti Bankasi");
+        title.setText("ALINTI BANKASI");
         title.setTextColor(0xFFE94560);
         title.setTextSize(22);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -48,10 +47,10 @@ public class NotesActivity extends AppCompatActivity {
         searchBox.setTextColor(0xFFFFFFFF);
         searchBox.setBackgroundColor(0xFF0F3460);
         searchBox.setPadding(24, 16, 24, 16);
-        LinearLayout.LayoutParams searchParams = new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        searchParams.setMargins(16, 8, 16, 16);
-        searchBox.setLayoutParams(searchParams);
+        sp.setMargins(16, 8, 16, 16);
+        searchBox.setLayoutParams(sp);
         root.addView(searchBox);
 
         ScrollView scrollView = new ScrollView(this);
@@ -103,19 +102,19 @@ public class NotesActivity extends AppCompatActivity {
             String label;
             int borderColor;
             switch (color) {
-                case "red":  label = "ITIRAZ";   borderColor = 0xFFE94560; break;
-                case "blue": label = "ARGUMAN";  borderColor = 0xFF1565C0; break;
-                default:     label = "VERI";     borderColor = 0xFF2E7D32; break;
+                case "red":  label = "ITIRAZ";  borderColor = 0xFFE94560; break;
+                case "blue": label = "ARGUMAN"; borderColor = 0xFF1565C0; break;
+                default:     label = "VERI";    borderColor = 0xFF2E7D32; break;
             }
 
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setBackgroundColor(0xFF16213E);
             card.setPadding(20, 16, 20, 16);
-            LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            cardParams.setMargins(0, 0, 0, 12);
-            card.setLayoutParams(cardParams);
+            cp.setMargins(0, 0, 0, 12);
+            card.setLayoutParams(cp);
 
             LinearLayout topRow = new LinearLayout(this);
             topRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -126,8 +125,7 @@ public class NotesActivity extends AppCompatActivity {
             labelView.setTextColor(borderColor);
             labelView.setTextSize(11);
             labelView.setTypeface(null, android.graphics.Typeface.BOLD);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
-            labelView.setLayoutParams(lp);
+            labelView.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
             topRow.addView(labelView);
 
             Button btnEdit = new Button(this);
@@ -174,14 +172,9 @@ public class NotesActivity extends AppCompatActivity {
             btnEdit.setOnClickListener(v -> {
                 AlertDialog.Builder builder = new AlertDialog.Builder(this);
                 builder.setTitle("Notu Duzenle");
-                LinearLayout editLayout = new LinearLayout(this);
-                editLayout.setOrientation(LinearLayout.VERTICAL);
-                editLayout.setPadding(32, 16, 32, 16);
-
-                TextView colorLabel = new TextView(this);
-                colorLabel.setText("Kategori:");
-                colorLabel.setTextColor(0xFF888888);
-                editLayout.addView(colorLabel);
+                LinearLayout el = new LinearLayout(this);
+                el.setOrientation(LinearLayout.VERTICAL);
+                el.setPadding(32, 16, 32, 16);
 
                 LinearLayout colorRow = new LinearLayout(this);
                 colorRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -213,7 +206,7 @@ public class NotesActivity extends AppCompatActivity {
                 colorRow.addView(bRed);
                 colorRow.addView(bBlue);
                 colorRow.addView(bGreen);
-                editLayout.addView(colorRow);
+                el.addView(colorRow);
 
                 EditText editInput = new EditText(this);
                 editInput.setText(currentNote);
@@ -221,9 +214,9 @@ public class NotesActivity extends AppCompatActivity {
                 editInput.setBackgroundColor(0xFFFFFFFF);
                 editInput.setPadding(16, 12, 16, 12);
                 editInput.setMinLines(3);
-                editLayout.addView(editInput);
+                el.addView(editInput);
 
-                builder.setView(editLayout);
+                builder.setView(el);
                 builder.setPositiveButton("Kaydet", (d, w) -> {
                     ContentValues values = new ContentValues();
                     values.put("note", editInput.getText().toString());
@@ -251,16 +244,14 @@ public class NotesActivity extends AppCompatActivity {
     }
 
     class DBHelper extends SQLiteOpenHelper {
-        DBHelper() { super(NotesActivity.this, "goblith.db", null, 2); }
-        @Override
-        public void onCreate(SQLiteDatabase db) {
+        DBHelper() { super(NotesActivity.this, "goblith.db", null, 3); }
+        @Override public void onCreate(SQLiteDatabase db) {
             db.execSQL("CREATE TABLE IF NOT EXISTS highlights (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, color TEXT, note TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
-            db.execSQL("CREATE TABLE IF NOT EXISTS library (pdf_uri TEXT PRIMARY KEY, custom_name TEXT, last_page INTEGER DEFAULT 0, last_opened TEXT)");
+            db.execSQL("CREATE TABLE IF NOT EXISTS library (pdf_uri TEXT PRIMARY KEY, custom_name TEXT, file_type TEXT DEFAULT 'PDF', last_page INTEGER DEFAULT 0, last_opened TEXT)");
         }
-        @Override
-        public void onUpgrade(SQLiteDatabase db, int o, int n) {
-            db.execSQL("CREATE TABLE IF NOT EXISTS library (pdf_uri TEXT PRIMARY KEY, custom_name TEXT, last_page INTEGER DEFAULT 0, last_opened TEXT)");
+        @Override public void onUpgrade(SQLiteDatabase db, int o, int n) {
             try { db.execSQL("ALTER TABLE library ADD COLUMN custom_name TEXT"); } catch (Exception e) {}
+            try { db.execSQL("ALTER TABLE library ADD COLUMN file_type TEXT DEFAULT 'PDF'"); } catch (Exception e) {}
         }
     }
 }
