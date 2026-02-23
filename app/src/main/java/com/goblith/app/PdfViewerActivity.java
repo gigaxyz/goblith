@@ -1,6 +1,7 @@
 package com.goblith.app;
 
 import android.content.ContentValues;
+import android.content.Intent;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
@@ -834,11 +835,7 @@ public class PdfViewerActivity extends AppCompatActivity {
     private Button flex(Button b,int lm){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1);lp.setMargins(lm,0,0,0);b.setLayoutParams(lp);return b;}
 
     // ── Intent import ─────────────────────────────────────────────────────────
-    android.content.Intent Intent(Class<?> c){return new android.content.Intent(this,c);}
-    private android.content.Intent Intent = null;
-    private void startActivity(android.content.Intent i){super.startActivity(i);}
-
-    class DBHelper extends SQLiteOpenHelper{
+class DBHelper extends SQLiteOpenHelper{
         DBHelper(){super(PdfViewerActivity.this,"goblith.db",null,7);}
         @Override public void onCreate(SQLiteDatabase db){
             db.execSQL("CREATE TABLE IF NOT EXISTS highlights (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, color TEXT, note TEXT, tag TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
