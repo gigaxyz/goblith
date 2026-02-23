@@ -738,6 +738,9 @@ public class PdfViewerActivity extends AppCompatActivity {
     }
 
     void loadPageDrawings(int page){
+        // Eksik kolonları ekle
+        try{db.execSQL("ALTER TABLE page_highlights ADD COLUMN tool_type INTEGER DEFAULT 0");}catch(Exception ignored){}
+        try{db.execSQL("ALTER TABLE page_highlights ADD COLUMN path_data TEXT");}catch(Exception ignored){}
         if(drawingOverlay==null) return;
         List<Long>     ids=new ArrayList<>();
         List<DrawItem> its=new ArrayList<>();
