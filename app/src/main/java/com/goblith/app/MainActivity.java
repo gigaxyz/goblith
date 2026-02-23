@@ -61,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
         Button btnStats  = makeBtn("ISTATISTIKLER",        R.drawable.ic_stats,      0xFF1A5276);
         Button btnCross  = makeBtn("CAPRAZ BAGLANTI",      R.drawable.ic_cross,      0xFF1B5E20);
         Button btnFlash  = makeBtn("FLASHCARD",            R.drawable.ic_notes,      0xFF4A148C);
+        Button btnArchiveMain = makeBtn("ARŞİV", R.drawable.ic_notes, 0xFF1B5E20);
         Button btnList   = makeBtn("OKUMA LISTESI",        R.drawable.ic_stats,      0xFF0D47A1);
         Button btnBmarks = makeBtn("YER IMLERI",           R.drawable.ic_add,        0xFF37474F);
 
@@ -68,6 +69,8 @@ public class MainActivity extends AppCompatActivity {
         root.addView(makeRow(btnWords,  btnStats));
         root.addView(makeRow(btnCross,  btnFlash));
         root.addView(makeRow(btnList,   btnBmarks));
+        btnArchiveMain.setOnClickListener(v -> startActivity(new Intent(this, ArchiveActivity.class)));
+        root.addView(makeRow(btnArchiveMain, makeBtn("", R.drawable.ic_notes, 0x001A1A2E)));
 
         TextView libTitle = new TextView(this);
         libTitle.setText("KUTUPHANEM");
@@ -102,10 +105,7 @@ public class MainActivity extends AppCompatActivity {
         btnFlash.setOnClickListener(v  -> startActivity(new Intent(this, FlashcardActivity.class)));
         btnList.setOnClickListener(v   -> startActivity(new Intent(this, ReadingListActivity.class)));
         btnBmarks.setOnClickListener(v -> showAllBookmarks());
-        Button btnArchiveMain = makeBtn("ARŞİV", R.drawable.ic_notes, 0xFF1B5E20);
-        ((LinearLayout)root.getChildAt(6)).addView(btnArchiveMain);
-        btnArchiveMain.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        btnArchiveMain.setOnClickListener(v -> startActivity(new Intent(this, ArchiveActivity.class)));
+
     }
 
     private LinearLayout makeRow(Button b1, Button b2) {
