@@ -164,7 +164,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                 cv.put("path_data",sb.toString());
             }
             long newId=db.insert("page_highlights",null,cv);
-            loadPageHighlights(currentPage); // yeniden yükle
+            PdfViewerActivity.this.loadPageDrawings(currentPage);
         }
 
         long undoLast() {
