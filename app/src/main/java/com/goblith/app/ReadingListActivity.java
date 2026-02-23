@@ -9,11 +9,11 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,48 +35,40 @@ public class ReadingListActivity extends AppCompatActivity {
         root.setBackgroundColor(0xFF1A1A2E);
 
         TextView title = new TextView(this);
-        title.setText("OKUMA LİSTESİ");
+        title.setText("OKUMA LISTESI");
         title.setTextColor(0xFFE94560);
         title.setTextSize(22);
         title.setTypeface(null, Typeface.BOLD);
-        title.setPadding(24, 32, 24, 8);
+        title.setPadding(24, 32, 24, 16);
         root.addView(title);
 
-        // Sekme butonları
+        // Sekmeler
         LinearLayout tabRow = new LinearLayout(this);
         tabRow.setOrientation(LinearLayout.HORIZONTAL);
         tabRow.setPadding(16, 0, 16, 16);
 
-        btnOkunacak = makeTabBtn("📚 OKUNACAK", true);
-        btnOkunuyor  = makeTabBtn("📖 OKUNUYOR",  false);
-        btnOkundu   = makeTabBtn("✓ OKUNDU",   false);
+        btnOkunacak = makeTabBtn("OKUNACAK");
+        btnOkunuyor  = makeTabBtn("OKUNUYOR");
+        btnOkundu   = makeTabBtn("OKUNDU");
 
-        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
-        tp.setMargins(0, 0, 6, 0);
-        btnOkunacak.setLayoutParams(tp);
-        LinearLayout.LayoutParams tp2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
-        tp2.setMargins(0, 0, 6, 0);
-        btnOkunuyor.setLayoutParams(tp2);
-        btnOkundu.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-
-        tabRow.addView(btnOkunacak);
-        tabRow.addView(btnOkunuyor);
-        tabRow.addView(btnOkundu);
+        tabRow.addView(withWeight(btnOkunacak, 6));
+        tabRow.addView(withWeight(btnOkunuyor, 6));
+        tabRow.addView(withWeight(btnOkundu, 0));
         root.addView(tabRow);
 
-        // Kütüphaneden ekle butonu
-        Button btnAddFromLib = new Button(this);
-        btnAddFromLib.setText("+ Kütüphaneden Ekle");
-        btnAddFromLib.setBackgroundColor(0xFF0F3460);
-        btnAddFromLib.setTextColor(0xFFFFFFFF);
-        btnAddFromLib.setTextSize(13);
-        btnAddFromLib.setTypeface(null, Typeface.BOLD);
-        LinearLayout.LayoutParams addP = new LinearLayout.LayoutParams(
+        // Kütüphaneden ekle
+        Button btnAdd = new Button(this);
+        btnAdd.setText("+ Kutuphaneden Ekle");
+        btnAdd.setBackgroundColor(0xFF0F3460);
+        btnAdd.setTextColor(0xFFFFFFFF);
+        btnAdd.setTextSize(13);
+        btnAdd.setTypeface(null, Typeface.BOLD);
+        btnAdd.setPadding(16, 14, 16, 14);
+        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        addP.setMargins(16, 0, 16, 16);
-        btnAddFromLib.setLayoutParams(addP);
-        btnAddFromLib.setPadding(16, 12, 16, 12);
-        root.addView(btnAddFromLib);
+        ap.setMargins(16, 0, 16, 16);
+        btnAdd.setLayoutParams(ap);
+        root.addView(btnAdd);
 
         ScrollView sv = new ScrollView(this);
         listContainer = new LinearLayout(this);
@@ -86,23 +78,30 @@ public class ReadingListActivity extends AppCompatActivity {
         root.addView(sv);
 
         setContentView(root);
+        updateTabs();
         loadList("okunacak");
 
-        btnOkunacak.setOnClickListener(v -> { activeStatus="okunacak"; updateTabs(); loadList("okunacak"); });
-        btnOkunuyor.setOnClickListener(v -> { activeStatus="okunuyor"; updateTabs(); loadList("okunuyor"); });
-        btnOkundu.setOnClickListener(v -> { activeStatus="okundu"; updateTabs(); loadList("okundu"); });
-
-        btnAddFromLib.setOnClickListener(v -> showAddFromLibDialog());
+        btnOkunacak.setOnClickListener(v -> { activeStatus="okunacak"; updateTabs(); loadList(activeStatus); });
+        btnOkunuyor.setOnClickListener(v -> { activeStatus="okunuyor";  updateTabs(); loadList(activeStatus); });
+        btnOkundu.setOnClickListener(v  -> { activeStatus="okundu";   updateTabs(); loadList(activeStatus); });
+        btnAdd.setOnClickListener(v -> showAddDialog());
     }
 
-    private Button makeTabBtn(String text, boolean active) {
+    private Button makeTabBtn(String text) {
         Button btn = new Button(this);
         btn.setText(text);
-        btn.setBackgroundColor(active ? 0xFFE94560 : 0xFF16213E);
         btn.setTextColor(0xFFFFFFFF);
         btn.setTextSize(11);
         btn.setTypeface(null, Typeface.BOLD);
         btn.setPadding(8, 10, 8, 10);
+        btn.setBackgroundColor(0xFF16213E);
+        return btn;
+    }
+
+    private Button withWeight(Button btn, int leftMargin) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+        lp.setMargins(leftMargin, 0, 0, 0);
+        btn.setLayoutParams(lp);
         return btn;
     }
 
@@ -115,16 +114,16 @@ public class ReadingListActivity extends AppCompatActivity {
     private void loadList(String status) {
         listContainer.removeAllViews();
         Cursor c = db.rawQuery(
-            "SELECT r.id, r.pdf_uri, r.status, r.notes_text, r.added_date, l.custom_name, l.last_page " +
+            "SELECT r.id, r.pdf_uri, r.status, r.added_date, l.custom_name, l.last_page " +
             "FROM reading_list r LEFT JOIN library l ON r.pdf_uri=l.pdf_uri " +
             "WHERE r.status=? ORDER BY r.added_date DESC",
             new String[]{status});
 
         if (c.getCount() == 0) {
             TextView empty = new TextView(this);
-            String msg = status.equals("okunacak") ? "Okuma listeniz boş.\nKütüphaneden kitap ekleyin."
-                : status.equals("okunuyor") ? "Şu an okuduğunuz kitap yok." : "Henüz tamamlanan kitap yok.";
-            empty.setText(msg);
+            empty.setText(status.equals("okunacak") ? "Okuma listeniz bos.\nKutuphaneden ekleyin."
+                : status.equals("okunuyor") ? "Su an okunan kitap yok."
+                : "Henuz tamamlanan kitap yok.");
             empty.setTextColor(0xFF555555);
             empty.setTextSize(14);
             empty.setGravity(Gravity.CENTER);
@@ -135,13 +134,12 @@ public class ReadingListActivity extends AppCompatActivity {
         }
 
         while (c.moveToNext()) {
-            int id = c.getInt(0);
-            String uri = c.getString(1);
-            String st = c.getString(2);
-            String notes = c.getString(3);
-            String date = c.getString(4);
-            String bookName = c.getString(5);
-            int lastPage = c.getInt(6);
+            int    id       = c.getInt(0);
+            String uri      = c.getString(1);
+            String st       = c.getString(2);
+            String date     = c.getString(3);
+            String bookName = c.getString(4);
+            int    lastPage = c.getInt(5);
             if (bookName == null) bookName = "Bilinmeyen Kitap";
 
             LinearLayout card = new LinearLayout(this);
@@ -161,129 +159,108 @@ public class ReadingListActivity extends AppCompatActivity {
             card.addView(nameView);
 
             if (lastPage > 0) {
-                TextView pageView = new TextView(this);
-                pageView.setText("Son konum: Sayfa " + (lastPage+1));
-                pageView.setTextColor(0xFF888888);
-                pageView.setTextSize(12);
-                pageView.setPadding(0, 4, 0, 0);
-                card.addView(pageView);
+                TextView pv = new TextView(this);
+                pv.setText("Son konum: Sayfa " + (lastPage+1));
+                pv.setTextColor(0xFF888888);
+                pv.setTextSize(12);
+                pv.setPadding(0, 4, 0, 0);
+                card.addView(pv);
             }
 
-            if (notes != null && !notes.isEmpty()) {
-                TextView notesView = new TextView(this);
-                notesView.setText(notes);
-                notesView.setTextColor(0xFF6688AA);
-                notesView.setTextSize(13);
-                notesView.setPadding(0, 6, 0, 0);
-                card.addView(notesView);
+            if (date != null && date.length() >= 10) {
+                TextView dv = new TextView(this);
+                dv.setText("Eklendi: " + date.substring(0, 10));
+                dv.setTextColor(0xFF555566);
+                dv.setTextSize(11);
+                dv.setPadding(0, 4, 0, 0);
+                card.addView(dv);
             }
 
-            // Durum değiştirme butonları
             LinearLayout btnRow = new LinearLayout(this);
             btnRow.setOrientation(LinearLayout.HORIZONTAL);
             btnRow.setPadding(0, 10, 0, 0);
 
             if (!st.equals("okunuyor")) {
-                Button btnReading = new Button(this);
-                btnReading.setText("📖 Okuyorum");
-                btnReading.setBackgroundColor(0xFF1565C0);
-                btnReading.setTextColor(0xFFFFFFFF);
-                btnReading.setTextSize(11);
-                btnReading.setPadding(12, 6, 12, 6);
-                btnReading.setLayoutParams(new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-                btnRow.addView(btnReading);
+                Button b = makeSmallBtn("Okuyorum", 0xFF1565C0);
                 final int fId = id;
-                btnReading.setOnClickListener(v -> { updateStatus(fId, "okunuyor"); loadList(activeStatus); });
+                b.setOnClickListener(v -> { updateStatus(fId, "okunuyor"); loadList(activeStatus); });
+                btnRow.addView(b);
             }
-
             if (!st.equals("okundu")) {
-                Button btnDone = new Button(this);
-                btnDone.setText("✓ Tamamladım");
-                btnDone.setBackgroundColor(0xFF2E7D32);
-                btnDone.setTextColor(0xFFFFFFFF);
-                btnDone.setTextSize(11);
-                btnDone.setPadding(12, 6, 12, 6);
-                LinearLayout.LayoutParams dp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                dp.setMargins(8, 0, 0, 0);
-                btnDone.setLayoutParams(dp);
-                btnRow.addView(btnDone);
+                Button b = makeSmallBtn("Tamamladim", 0xFF2E7D32);
+                LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                bp.setMargins(8, 0, 0, 0);
+                b.setLayoutParams(bp);
                 final int fId = id;
-                btnDone.setOnClickListener(v -> { updateStatus(fId, "okundu"); loadList(activeStatus); });
+                b.setOnClickListener(v -> { updateStatus(fId, "okundu"); loadList(activeStatus); });
+                btnRow.addView(b);
             }
 
-            Button btnRemove = new Button(this);
-            btnRemove.setText("✕");
-            btnRemove.setBackgroundColor(0xFF333333);
-            btnRemove.setTextColor(0xFF888888);
-            btnRemove.setTextSize(11);
-            btnRemove.setPadding(12, 6, 12, 6);
-            LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            rp.setMargins(8, 0, 0, 0);
-            btnRemove.setLayoutParams(rp);
-            btnRow.addView(btnRemove);
+            Button bDel = makeSmallBtn("Kaldir", 0xFF333333);
+            LinearLayout.LayoutParams delP = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            delP.setMargins(8, 0, 0, 0);
+            bDel.setLayoutParams(delP);
             final int fId = id;
-            btnRemove.setOnClickListener(v -> {
+            bDel.setOnClickListener(v -> {
                 db.delete("reading_list", "id=?", new String[]{String.valueOf(fId)});
                 loadList(activeStatus);
             });
-
+            btnRow.addView(bDel);
             card.addView(btnRow);
             listContainer.addView(card);
         }
         c.close();
     }
 
+    private Button makeSmallBtn(String text, int color) {
+        Button btn = new Button(this);
+        btn.setText(text);
+        btn.setBackgroundColor(color);
+        btn.setTextColor(0xFFFFFFFF);
+        btn.setTextSize(11);
+        btn.setPadding(14, 6, 14, 6);
+        return btn;
+    }
+
     private void updateStatus(int id, String status) {
         ContentValues cv = new ContentValues();
         cv.put("status", status);
         db.update("reading_list", cv, "id=?", new String[]{String.valueOf(id)});
-        Toast.makeText(this, "Güncellendi", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Guncellendi", Toast.LENGTH_SHORT).show();
     }
 
-    private void showAddFromLibDialog() {
-        Cursor c = db.rawQuery("SELECT pdf_uri, custom_name FROM library ORDER BY last_opened DESC", null);
+    private void showAddDialog() {
+        Cursor c = db.rawQuery(
+            "SELECT l.pdf_uri, l.custom_name FROM library l " +
+            "WHERE l.pdf_uri NOT IN (SELECT pdf_uri FROM reading_list) " +
+            "ORDER BY l.last_opened DESC", null);
         if (!c.moveToFirst()) {
-            Toast.makeText(this, "Kütüphanede kitap yok", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Tum kitaplar zaten listede", Toast.LENGTH_SHORT).show();
             c.close(); return;
         }
-
-        List<String> uris = new ArrayList<>();
+        List<String> uris  = new ArrayList<>();
         List<String> names = new ArrayList<>();
         do {
             uris.add(c.getString(0));
-            String name = c.getString(1);
-            names.add(name != null ? name : "Bilinmeyen");
+            String n = c.getString(1);
+            names.add(n != null ? n : "Bilinmeyen");
         } while (c.moveToNext());
         c.close();
 
-        String[] nameArr = names.toArray(new String[0]);
-        new androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Kitap Seç")
-            .setItems(nameArr, (d, which) -> {
-                // Zaten listede mi?
-                Cursor ex = db.rawQuery("SELECT id FROM reading_list WHERE pdf_uri=?", new String[]{uris.get(which)});
-                boolean exists = ex.moveToFirst();
-                ex.close();
-                if (exists) {
-                    Toast.makeText(this, "Bu kitap zaten listede", Toast.LENGTH_SHORT).show();
-                    return;
-                }
+        new AlertDialog.Builder(this)
+            .setTitle("Kitap Sec")
+            .setItems(names.toArray(new String[0]), (d, which) -> {
                 ContentValues cv = new ContentValues();
-                cv.put("pdf_uri", uris.get(which));
-                cv.put("status", "okunacak");
+                cv.put("pdf_uri",    uris.get(which));
+                cv.put("status",     "okunacak");
                 cv.put("added_date", new java.util.Date().toString());
                 db.insert("reading_list", null, cv);
-                Toast.makeText(this, names.get(which) + " listeye eklendi", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, names.get(which) + " eklendi", Toast.LENGTH_SHORT).show();
                 loadList(activeStatus);
             })
-            .setNegativeButton("İptal", null)
+            .setNegativeButton("Iptal", null)
             .show();
     }
-
-    // ArrayList import için
 
     class DBHelper extends SQLiteOpenHelper {
         DBHelper() { super(ReadingListActivity.this, "goblith.db", null, 6); }
@@ -295,12 +272,12 @@ public class ReadingListActivity extends AppCompatActivity {
             db.execSQL("CREATE TABLE IF NOT EXISTS reading_list (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, status TEXT DEFAULT 'okunacak', notes_text TEXT, added_date TEXT)");
         }
         @Override public void onUpgrade(SQLiteDatabase db, int o, int n) {
-            try { db.execSQL("ALTER TABLE highlights ADD COLUMN tag TEXT"); } catch (Exception e) {}
-            try { db.execSQL("ALTER TABLE library ADD COLUMN custom_name TEXT"); } catch (Exception e) {}
-            try { db.execSQL("ALTER TABLE library ADD COLUMN file_type TEXT DEFAULT 'PDF'"); } catch (Exception e) {}
-            try { db.execSQL("CREATE TABLE IF NOT EXISTS page_highlights (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, x1 REAL, y1 REAL, x2 REAL, y2 REAL, color TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"); } catch (Exception e) {}
-            try { db.execSQL("CREATE TABLE IF NOT EXISTS bookmarks (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, title TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"); } catch (Exception e) {}
-            try { db.execSQL("CREATE TABLE IF NOT EXISTS reading_list (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, status TEXT DEFAULT 'okunacak', notes_text TEXT, added_date TEXT)"); } catch (Exception e) {}
+            try { db.execSQL("ALTER TABLE highlights ADD COLUMN tag TEXT"); } catch (Exception ignored) {}
+            try { db.execSQL("ALTER TABLE library ADD COLUMN custom_name TEXT"); } catch (Exception ignored) {}
+            try { db.execSQL("ALTER TABLE library ADD COLUMN file_type TEXT DEFAULT 'PDF'"); } catch (Exception ignored) {}
+            try { db.execSQL("CREATE TABLE IF NOT EXISTS page_highlights (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, x1 REAL, y1 REAL, x2 REAL, y2 REAL, color TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"); } catch (Exception ignored) {}
+            try { db.execSQL("CREATE TABLE IF NOT EXISTS bookmarks (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, title TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)"); } catch (Exception ignored) {}
+            try { db.execSQL("CREATE TABLE IF NOT EXISTS reading_list (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, status TEXT DEFAULT 'okunacak', notes_text TEXT, added_date TEXT)"); } catch (Exception ignored) {}
         }
     }
 }
