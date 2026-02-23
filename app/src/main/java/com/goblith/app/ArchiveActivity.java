@@ -175,7 +175,7 @@ public class ArchiveActivity extends AppCompatActivity {
 
             // Alıntı
             TextView quoteView=new TextView(this);
-            quoteView.setText("""+quote+""");
+            quoteView.setText(quote);
             quoteView.setTextColor(0xFFDDDDDD); quoteView.setTextSize(15);
             quoteView.setPadding(0,10,0,8); quoteView.setLineSpacing(4,1.3f);
             card.addView(quoteView);
