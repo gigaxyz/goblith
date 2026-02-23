@@ -23,5 +23,6 @@
         <activity android:name=".CrossRefActivity" android:exported="false"/>
         <activity android:name=".FlashcardActivity" android:exported="false"/>
         <activity android:name=".ReadingListActivity" android:exported="false"/>
+        <activity android:name=".ArchiveActivity" android:exported="false"/>
     </application>
 </manifest>

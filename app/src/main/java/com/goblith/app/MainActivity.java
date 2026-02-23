@@ -102,6 +102,10 @@ public class MainActivity extends AppCompatActivity {
         btnFlash.setOnClickListener(v  -> startActivity(new Intent(this, FlashcardActivity.class)));
         btnList.setOnClickListener(v   -> startActivity(new Intent(this, ReadingListActivity.class)));
         btnBmarks.setOnClickListener(v -> showAllBookmarks());
+        Button btnArchiveMain = makeBtn("ARŞİV", R.drawable.ic_notes, 0xFF1B5E20);
+        ((LinearLayout)root.getChildAt(6)).addView(btnArchiveMain);
+        btnArchiveMain.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        btnArchiveMain.setOnClickListener(v -> startActivity(new Intent(this, ArchiveActivity.class)));
     }
 
     private LinearLayout makeRow(Button b1, Button b2) {
