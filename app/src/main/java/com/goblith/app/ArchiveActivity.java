@@ -117,6 +117,10 @@ public class ArchiveActivity extends AppCompatActivity {
 
     private void loadArchive() {
         listContainer.removeAllViews();
+        // Tablo yoksa olustur
+        try {
+            db.execSQL("CREATE TABLE IF NOT EXISTS archive (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, book_name TEXT, page INTEGER, quote TEXT, topic TEXT, importance INTEGER DEFAULT 2, created_at TEXT)");
+        } catch (Exception ignored) {}
         String sql = "SELECT id,book_name,page,quote,topic,importance,created_at,pdf_uri FROM archive";
         List<String> args = new ArrayList<>();
         List<String> conds = new ArrayList<>();
@@ -284,7 +288,7 @@ public class ArchiveActivity extends AppCompatActivity {
     }
 
     class DBHelper extends SQLiteOpenHelper {
-        DBHelper() { super(ArchiveActivity.this, "goblith.db", null, 7); }
+        DBHelper() { super(ArchiveActivity.this, "goblith.db", null, 8); }
         @Override public void onCreate(SQLiteDatabase db) {
             db.execSQL("CREATE TABLE IF NOT EXISTS archive (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, book_name TEXT, page INTEGER, quote TEXT, topic TEXT, importance INTEGER DEFAULT 2, created_at TEXT)");
         }

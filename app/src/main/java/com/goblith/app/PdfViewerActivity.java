@@ -512,6 +512,9 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     // ── Arşiv dialogu ─────────────────────────────────────────────────────────
     private void showArchiveDialog() {
+        try {
+            db.execSQL("CREATE TABLE IF NOT EXISTS archive (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, book_name TEXT, page INTEGER, quote TEXT, topic TEXT, importance INTEGER DEFAULT 2, created_at TEXT)");
+        } catch (Exception ignored) {}
         AlertDialog.Builder b=new AlertDialog.Builder(this);
         b.setTitle("📁 Arşive Ekle — Sayfa "+(currentPage+1));
 
