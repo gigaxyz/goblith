@@ -26,5 +26,6 @@
         <activity android:name=".ReadingListActivity" android:exported="false"/>
         <activity android:name=".ArchiveActivity" android:exported="false"/>
         <activity android:name=".CommunityArchiveActivity" android:exported="false"/>
+        <activity android:name=".SearchActivity" android:exported="false"/>
     </application>
 </manifest>

@@ -64,6 +64,7 @@ public class MainActivity extends AppCompatActivity {
         Button btnList   = makeBtn("OKUMA LISTESI",        R.drawable.ic_stats,      0xFF0D47A1);
         Button btnBmarks = makeBtn("YER IMLERI",           R.drawable.ic_add,        0xFF37474F);
         Button btnArchiveMain = makeBtn("ARSIV",               R.drawable.ic_notes,      0xFF1B5E20);
+        Button btnSearch     = makeBtn("PDF ARAMA",            R.drawable.ic_words,      0xFF880E4F);
 
         root.addView(makeRow(btnAdd,         btnNotes));
         root.addView(makeRow(btnWords,       btnStats));
@@ -77,6 +78,14 @@ public class MainActivity extends AppCompatActivity {
         btnArchiveMain.setLayoutParams(arsivLp);
         arsivRow.addView(btnArchiveMain);
         root.addView(arsivRow);
+        LinearLayout searchRow2 = new LinearLayout(this);
+        searchRow2.setOrientation(LinearLayout.HORIZONTAL);
+        searchRow2.setPadding(16, 0, 16, 10);
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        btnSearch.setLayoutParams(searchLp);
+        searchRow2.addView(btnSearch);
+        root.addView(searchRow2);
 
         TextView libTitle = new TextView(this);
         libTitle.setText("KUTUPHANEM");
@@ -110,6 +119,7 @@ public class MainActivity extends AppCompatActivity {
         btnCross.setOnClickListener(v  -> startActivity(new Intent(this, CrossRefActivity.class)));
         btnFlash.setOnClickListener(v  -> startActivity(new Intent(this, FlashcardActivity.class)));
         btnArchiveMain.setOnClickListener(v -> startActivity(new Intent(this, ArchiveActivity.class)));
+        btnSearch.setOnClickListener(v -> startActivity(new Intent(this, SearchActivity.class)));
         btnList.setOnClickListener(v   -> startActivity(new Intent(this, ReadingListActivity.class)));
         btnBmarks.setOnClickListener(v -> showAllBookmarks());
 
