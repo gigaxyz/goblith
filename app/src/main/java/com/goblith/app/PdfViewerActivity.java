@@ -428,8 +428,32 @@ public class PdfViewerActivity extends AppCompatActivity {
         bottomBar.addView(btnBlue);
         bottomBar.addView(btnGreen);
 
-        root.addView(topBar1); root.addView(topBar2); root.addView(drawToolbar);
-        root.addView(contentArea); root.addView(bottomBar);
+        // Gizle/göster butonu — topBar1'in sağına ekle
+        Button btnToggleUI = makeNavBtn("⋯");
+        btnToggleUI.setTextSize(16);
+        btnToggleUI.setPadding(16,8,16,8);
+        topBar1.addView(btnToggleUI);
+
+        // Başlangıçta gizli
+        topBar2.setVisibility(android.view.View.GONE);
+        bottomBar.setVisibility(android.view.View.GONE);
+        drawToolbar.setVisibility(android.view.View.GONE);
+
+        root.addView(topBar1);
+        root.addView(topBar2);
+        root.addView(drawToolbar);
+        root.addView(contentArea);
+        root.addView(bottomBar);
+
+        final boolean[] uiVisible = {false};
+        btnToggleUI.setOnClickListener(v -> {
+            uiVisible[0] = !uiVisible[0];
+            int vis = uiVisible[0] ? android.view.View.VISIBLE : android.view.View.GONE;
+            topBar2.setVisibility(vis);
+            bottomBar.setVisibility(vis);
+            if (!uiVisible[0]) drawToolbar.setVisibility(android.view.View.GONE);
+            btnToggleUI.setText(uiVisible[0] ? "✕" : "⋯");
+        });
         setContentView(root);
 
         if (fileType.equals("TXT")) openTextFile();

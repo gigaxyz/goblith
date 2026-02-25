@@ -36,12 +36,12 @@ public class MainActivity extends AppCompatActivity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xFF1A1A2E);
+        root.setBackgroundColor(0xFF0F0E17);
 
         // Başlık
         TextView title = new TextView(this);
         title.setText("Goblith");
-        title.setTextColor(0xFFE94560);
+        title.setTextColor(0xFF6D28D9);
         title.setTextSize(36);
         title.setTypeface(null, Typeface.BOLD);
         title.setPadding(24, 48, 24, 4);
@@ -49,22 +49,22 @@ public class MainActivity extends AppCompatActivity {
 
         TextView subtitle = new TextView(this);
         subtitle.setText("Kisisel Bilgi Sistemi");
-        subtitle.setTextColor(0xFF888888);
+        subtitle.setTextColor(0xFF6B6A8A);
         subtitle.setTextSize(13);
         subtitle.setPadding(24, 0, 24, 16);
         root.addView(subtitle);
 
         // Butonlar — referansları saklıyoruz
-        Button btnAdd    = makeBtn("+ DOSYA EKLE",        R.drawable.ic_add,        0xFFE94560);
-        Button btnNotes  = makeBtn("ALINTI BANKASI",       R.drawable.ic_notes,      0xFF0F3460);
-        Button btnWords  = makeBtn("KELIME ANALIZI",       R.drawable.ic_words,      0xFF6A1B9A);
-        Button btnStats  = makeBtn("ISTATISTIKLER",        R.drawable.ic_stats,      0xFF1A5276);
-        Button btnCross  = makeBtn("CAPRAZ BAGLANTI",      R.drawable.ic_cross,      0xFF1B5E20);
-        Button btnFlash  = makeBtn("FLASHCARD",            R.drawable.ic_notes,      0xFF4A148C);
-        Button btnList   = makeBtn("OKUMA LISTESI",        R.drawable.ic_stats,      0xFF0D47A1);
-        Button btnBmarks = makeBtn("YER IMLERI",           R.drawable.ic_add,        0xFF37474F);
-        Button btnArchiveMain = makeBtn("ARSIV",               R.drawable.ic_notes,      0xFF1B5E20);
-        Button btnSearch     = makeBtn("PDF ARAMA",            R.drawable.ic_words,      0xFF880E4F);
+        Button btnAdd    = makeBtn("+ DOSYA EKLE",        R.drawable.ic_add,        0xFF6D28D9);
+        Button btnNotes  = makeBtn("ALINTI BANKASI",       R.drawable.ic_notes,      0xFF1E1B4B);
+        Button btnWords  = makeBtn("KELIME ANALIZI",       R.drawable.ic_words,      0xFF4C1D95);
+        Button btnStats  = makeBtn("ISTATISTIKLER",        R.drawable.ic_stats,      0xFF1E1B4B);
+        Button btnCross  = makeBtn("CAPRAZ BAGLANTI",      R.drawable.ic_cross,      0xFF1E1B4B);
+        Button btnFlash  = makeBtn("FLASHCARD",            R.drawable.ic_notes,      0xFF4C1D95);
+        Button btnList   = makeBtn("OKUMA LISTESI",        R.drawable.ic_stats,      0xFF1E1B4B);
+        Button btnBmarks = makeBtn("YER IMLERI",           R.drawable.ic_add,        0xFF1E1B4B);
+        Button btnArchiveMain = makeBtn("ARSIV",               R.drawable.ic_notes,      0xFF1E1B4B);
+        Button btnSearch     = makeBtn("PDF ARAMA",            R.drawable.ic_words,      0xFF4C1D95);
 
         root.addView(makeRow(btnAdd,         btnNotes));
         root.addView(makeRow(btnWords,       btnStats));
@@ -89,7 +89,7 @@ public class MainActivity extends AppCompatActivity {
 
         TextView libTitle = new TextView(this);
         libTitle.setText("KUTUPHANEM");
-        libTitle.setTextColor(0xFF888888);
+        libTitle.setTextColor(0xFF6B6A8A);
         libTitle.setTextSize(12);
         libTitle.setTypeface(null, Typeface.BOLD);
         libTitle.setPadding(24, 4, 24, 10);
@@ -235,7 +235,7 @@ public class MainActivity extends AppCompatActivity {
 
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
-            card.setBackgroundColor(0xFF16213E);
+            card.setBackgroundColor(0xFF1A1831);
             card.setPadding(20, 16, 20, 16);
             LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -251,7 +251,7 @@ public class MainActivity extends AppCompatActivity {
             typeTag.setTextColor(0xFFFFFFFF);
             typeTag.setTextSize(10);
             typeTag.setTypeface(null, Typeface.BOLD);
-            typeTag.setBackgroundColor(type.equals("PDF") ? 0xFFE94560 : 0xFF0F3460);
+            typeTag.setBackgroundColor(type.equals("PDF") ? 0xFF6D28D9 : 0xFF1E1B4B);
             typeTag.setPadding(8, 4, 8, 4);
             LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -269,7 +269,7 @@ public class MainActivity extends AppCompatActivity {
 
             Button btnRename = new Button(this);
             btnRename.setText("✎");
-            btnRename.setBackgroundColor(0xFF0F3460);
+            btnRename.setBackgroundColor(0xFF1E1B4B);
             btnRename.setTextColor(0xFFFFFFFF);
             btnRename.setTextSize(14);
             btnRename.setPadding(16, 4, 16, 4);
@@ -277,7 +277,7 @@ public class MainActivity extends AppCompatActivity {
 
             Button btnDel = new Button(this);
             btnDel.setText("✕");
-            btnDel.setBackgroundColor(0xFFE94560);
+            btnDel.setBackgroundColor(0xFF6D28D9);
             btnDel.setTextColor(0xFFFFFFFF);
             btnDel.setTextSize(14);
             btnDel.setPadding(16, 4, 16, 4);
