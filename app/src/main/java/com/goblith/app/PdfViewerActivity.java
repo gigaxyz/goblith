@@ -19,7 +19,11 @@ import android.graphics.drawable.Drawable;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.AsyncTask;
 import android.os.Handler;
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader;
+import com.tom_roush.pdfbox.pdmodel.PDDocument;
+import com.tom_roush.pdfbox.text.PDFTextStripper;
 import android.os.ParcelFileDescriptor;
 import android.text.InputType;
 import android.view.Gravity;
@@ -313,6 +317,11 @@ public class PdfViewerActivity extends AppCompatActivity {
         topBar2.addView(flex(btnBookmark,6));
         topBar2.addView(flex(btnArchive,6));
         topBar2.addView(flex(btnNightBtn,6));
+        Button btnPdfSearch = makeSmallBtn("🔍 ARA", 0xFF4C1D95);
+        topBar2.addView(flex(btnPdfSearch,6));
+
+        btnPdfSearch.setOnClickListener(v -> showPdfSearchDialog());
+        PDFBoxResourceLoader.init(getApplicationContext());
 
         // ── Çizim toolbar ─────────────────────────────────────────────────────
         drawToolbar=new LinearLayout(this);
@@ -852,6 +861,173 @@ public class PdfViewerActivity extends AppCompatActivity {
         });
         b.setNegativeButton("İptal",null);b.show();
     }
+
+    // ── PDF Metin Arama ───────────────────────────────────────────────────────
+    private SearchOverlay searchOverlay;
+
+    private void showPdfSearchDialog() {
+        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
+        b.setTitle("PDF'de Metin Ara");
+        android.widget.EditText input = new android.widget.EditText(this);
+        input.setHint("Aramak istediğin cümle veya kelime...");
+        input.setPadding(32, 24, 32, 24);
+        b.setView(input);
+        b.setPositiveButton("Ara", (d, w) -> {
+            String query = input.getText().toString().trim();
+            if (query.isEmpty()) return;
+            doFuzzyPdfSearch(query);
+        });
+        b.setNegativeButton("İptal", null);
+        b.show();
+    }
+
+    private void doFuzzyPdfSearch(String query) {
+        Toast.makeText(this, "Aranıyor...", Toast.LENGTH_SHORT).show();
+        new AsyncTask<String, Void, int[]>() {
+            String[] pageTexts;
+            @Override
+            protected int[] doInBackground(String... params) {
+                String q = normalizeText(params[0]);
+                String[] qWords = q.split("\s+");
+                int bestPage = -1;
+                double bestScore = -1;
+                try {
+                    java.io.InputStream is = getContentResolver().openInputStream(android.net.Uri.parse(pdfUri));
+                    if (is == null) return new int[]{-1};
+                    PDDocument doc = PDDocument.load(is);
+                    int total = doc.getNumberOfPages();
+                    pageTexts = new String[total];
+                    for (int p = 0; p < total; p++) {
+                        PDFTextStripper st = new PDFTextStripper();
+                        st.setStartPage(p + 1); st.setEndPage(p + 1);
+                        pageTexts[p] = normalizeText(st.getText(doc));
+                    }
+                    doc.close(); is.close();
+                    // Fuzzy skor: her query kelimesi için sayfada kaç kez geçiyor
+                    for (int p = 0; p < total; p++) {
+                        double score = fuzzyScore(qWords, pageTexts[p]);
+                        if (score > bestScore) { bestScore = score; bestPage = p; }
+                    }
+                } catch (Exception e) { return new int[]{-1}; }
+                return new int[]{bestPage, (int)(bestScore * 100)};
+            }
+            @Override
+            protected void onPostExecute(int[] result) {
+                if (result[0] < 0) {
+                    Toast.makeText(PdfViewerActivity.this, "Bulunamadı veya hata oluştu", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                if (result[1] < 10) {
+                    Toast.makeText(PdfViewerActivity.this, "Eşleşme bulunamadı", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                int foundPage = result[0];
+                Toast.makeText(PdfViewerActivity.this,
+                    "Sayfa " + (foundPage + 1) + "'de bulundu (%" + result[1] + " eşleşme)",
+                    Toast.LENGTH_LONG).show();
+                loadPage(foundPage);
+                // Yanıp sönen overlay ekle
+                new Handler().postDelayed(() -> showSearchOverlay(query), 600);
+            }
+        }.execute(query);
+    }
+
+    private void showSearchOverlay(String query) {
+        if (searchOverlay != null) {
+            ((android.view.ViewGroup) searchOverlay.getParent()).removeView(searchOverlay);
+        }
+        searchOverlay = new SearchOverlay(this, query);
+        android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        // contentArea içindeki frameLayout'a ekle
+        try {
+            android.widget.FrameLayout frame = (android.widget.FrameLayout)
+                ((android.widget.FrameLayout) pdfImageView.getParent());
+            frame.addView(searchOverlay, lp);
+        } catch (Exception e) {
+            Toast.makeText(this, "İşaret eklenemedi", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private String normalizeText(String text) {
+        if (text == null) return "";
+        return text.toLowerCase()
+            .replaceAll("[.,!?;:"'()\[\]{}\-]", " ")
+            .replaceAll("\s+", " ")
+            .trim();
+    }
+
+    private double fuzzyScore(String[] queryWords, String pageText) {
+        if (pageText == null || pageText.isEmpty()) return 0;
+        int matched = 0;
+        for (String word : queryWords) {
+            if (word.length() < 2) continue;
+            // Tam eşleşme
+            if (pageText.contains(word)) { matched += 2; continue; }
+            // Kısmi eşleşme (en az 3 harf olan kelimelerin ilk 3 harfi)
+            if (word.length() >= 3 && pageText.contains(word.substring(0, 3))) matched++;
+        }
+        return queryWords.length > 0 ? (double) matched / (queryWords.length * 2) : 0;
+    }
+
+    // Yanıp sönen arama işareti overlay
+    class SearchOverlay extends View {
+        private Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private boolean visible = true;
+        private Handler handler = new Handler();
+        private String query;
+        private Runnable blink = new Runnable() {
+            @Override public void run() {
+                visible = !visible;
+                invalidate();
+                handler.postDelayed(this, 600);
+            }
+        };
+
+        SearchOverlay(android.content.Context ctx, String q) {
+            super(ctx);
+            this.query = q;
+            setBackgroundColor(android.graphics.Color.TRANSPARENT);
+            handler.post(blink);
+            setOnClickListener(v -> {
+                handler.removeCallbacks(blink);
+                android.view.ViewGroup parent = (android.view.ViewGroup) getParent();
+                if (parent != null) parent.removeView(this);
+                searchOverlay = null;
+                Toast.makeText(ctx, "İşaret kaldırıldı", Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            if (!visible) return;
+            int w = getWidth(), h = getHeight();
+            // Ortada yanıp sönen kutu
+            paint.setColor(0x884488FF);
+            paint.setStyle(Paint.Style.FILL);
+            float boxH = h * 0.08f;
+            float top  = h * 0.35f;
+            canvas.drawRect(w * 0.05f, top, w * 0.95f, top + boxH, paint);
+            // Kenarlık
+            paint.setColor(0xFF4488FF);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(4);
+            canvas.drawRect(w * 0.05f, top, w * 0.95f, top + boxH, paint);
+            // Metin
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xFFFFFFFF);
+            paint.setTextSize(32);
+            paint.setTextAlign(Paint.Align.CENTER);
+            String label = "🔍 "" + (query.length() > 20 ? query.substring(0, 20) + "…" : query) + """;
+            canvas.drawText(label, w / 2f, top + boxH * 0.65f, paint);
+            // Alt bilgi
+            paint.setTextSize(22);
+            paint.setColor(0xFFAABBFF);
+            canvas.drawText("Kapatmak için dokun", w / 2f, top + boxH + 36, paint);
+        }
+    }
+
 
     // ── Buton yardımcıları ────────────────────────────────────────────────────
     private Button makeNavBtn(String t){Button b=new Button(this);b.setText(t);b.setBackgroundColor(0xFF1A3A6A);b.setTextColor(0xFFFFFFFF);b.setTextSize(20);b.setTypeface(null,android.graphics.Typeface.BOLD);b.setPadding(28,8,28,8);return b;}
