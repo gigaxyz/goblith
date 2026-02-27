@@ -21,9 +21,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.AsyncTask;
 import android.os.Handler;
-import com.tom_roush.pdfbox.android.PDFBoxResourceLoader;
-import com.tom_roush.pdfbox.pdmodel.PDDocument;
-import com.tom_roush.pdfbox.text.PDFTextStripper;
 import android.os.ParcelFileDescriptor;
 import android.text.InputType;
 import android.view.Gravity;
@@ -321,7 +318,6 @@ public class PdfViewerActivity extends AppCompatActivity {
         topBar2.addView(flex(btnPdfSearch,6));
 
         btnPdfSearch.setOnClickListener(v -> showPdfSearchDialog());
-        PDFBoxResourceLoader.init(getApplicationContext());
 
         // ── Çizim toolbar ─────────────────────────────────────────────────────
         drawToolbar=new LinearLayout(this);
@@ -883,51 +879,67 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     private void doFuzzyPdfSearch(String query) {
         Toast.makeText(this, "Aranıyor...", Toast.LENGTH_SHORT).show();
-        new AsyncTask<String, Void, int[]>() {
-            String[] pageTexts;
+        new AsyncTask<String, Void, Integer>() {
             @Override
-            protected int[] doInBackground(String... params) {
-                String q = normalizeText(params[0]);
-                String[] qWords = q.split("\s+");
-                int bestPage = -1;
-                double bestScore = -1;
+            protected Integer doInBackground(String... params) {
                 try {
-                    java.io.InputStream is = getContentResolver().openInputStream(android.net.Uri.parse(pdfUri));
-                    if (is == null) return new int[]{-1};
-                    PDDocument doc = PDDocument.load(is);
-                    int total = doc.getNumberOfPages();
-                    pageTexts = new String[total];
-                    for (int p = 0; p < total; p++) {
-                        PDFTextStripper st = new PDFTextStripper();
-                        st.setStartPage(p + 1); st.setEndPage(p + 1);
-                        pageTexts[p] = normalizeText(st.getText(doc));
+                    String q = normalizeText(params[0]);
+                    String[] qWords = q.split("\s+");
+                    java.io.InputStream is = getContentResolver()
+                        .openInputStream(android.net.Uri.parse(pdfUri));
+                    if (is == null) return -1;
+                    byte[] bytes = new byte[is.available()];
+                    is.read(bytes);
+                    is.close();
+                    String raw = new String(bytes, "ISO-8859-1").toLowerCase();
+                    // PDF sayfa sınırlarını bul (/Page objelerini say)
+                    int bestPage = 0;
+                    int bestScore = 0;
+                    // Basit yaklaşım: her 3000 karakterlik blokta fuzzy skor hesapla
+                    int blockSize = 3000;
+                    int pageIdx = 0;
+                    for (int i = 0; i < raw.length(); i += blockSize) {
+                        String block = raw.substring(i, Math.min(i + blockSize, raw.length()));
+                        int score = 0;
+                        for (String word : qWords) {
+                            if (word.length() < 2) continue;
+                            if (block.contains(word)) score += 2;
+                            else if (word.length() >= 4 && block.contains(word.substring(0, word.length()-1))) score++;
+                        }
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestPage = pageIdx;
+                        }
+                        pageIdx++;
                     }
-                    doc.close(); is.close();
-                    // Fuzzy skor: her query kelimesi için sayfada kaç kez geçiyor
-                    for (int p = 0; p < total; p++) {
-                        double score = fuzzyScore(qWords, pageTexts[p]);
-                        if (score > bestScore) { bestScore = score; bestPage = p; }
-                    }
-                } catch (Exception e) { return new int[]{-1}; }
-                return new int[]{bestPage, (int)(bestScore * 100)};
+                    if (bestScore == 0) return -2;
+                    // Yaklaşık sayfa hesabı: toplam sayfa / toplam blok * bestPage
+                    android.graphics.pdf.PdfRenderer renderer = new android.graphics.pdf.PdfRenderer(
+                        getApplicationContext().getContentResolver()
+                            .openFileDescriptor(android.net.Uri.parse(pdfUri), "r"));
+                    int totalPages = renderer.getPageCount();
+                    renderer.close();
+                    int totalBlocks = (raw.length() / blockSize) + 1;
+                    int approxPage = (int)((double)bestPage / totalBlocks * totalPages);
+                    return Math.min(approxPage, totalPages - 1);
+                } catch (Exception e) { return -1; }
             }
             @Override
-            protected void onPostExecute(int[] result) {
-                if (result[0] < 0) {
-                    Toast.makeText(PdfViewerActivity.this, "Bulunamadı veya hata oluştu", Toast.LENGTH_LONG).show();
-                    return;
-                }
-                if (result[1] < 10) {
+            protected void onPostExecute(Integer result) {
+                if (result == -2) {
                     Toast.makeText(PdfViewerActivity.this, "Eşleşme bulunamadı", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                int foundPage = result[0];
+                if (result < 0) {
+                    Toast.makeText(PdfViewerActivity.this, "Hata oluştu", Toast.LENGTH_LONG).show();
+                    return;
+                }
                 Toast.makeText(PdfViewerActivity.this,
-                    "Sayfa " + (foundPage + 1) + "'de bulundu (%" + result[1] + " eşleşme)",
+                    "Sayfa " + (result + 1) + " civarında bulundu",
                     Toast.LENGTH_LONG).show();
-                loadPage(foundPage);
-                // Yanıp sönen overlay ekle
-                new Handler().postDelayed(() -> showSearchOverlay(query), 600);
+                loadPage(result);
+                final String fQuery = query;
+                new Handler().postDelayed(() -> showSearchOverlay(fQuery), 600);
             }
         }.execute(query);
     }
