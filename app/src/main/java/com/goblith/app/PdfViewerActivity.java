@@ -964,8 +964,8 @@ public class PdfViewerActivity extends AppCompatActivity {
     private String normalizeText(String text) {
         if (text == null) return "";
         return text.toLowerCase()
-            .replaceAll("[.,!?;:"'()\[\]{}\-]", " ")
-            .replaceAll("\s+", " ")
+            .replaceAll("[.,!?;:()\\[\\]{}]", " ")
+            .replaceAll("\\s+", " ")
             .trim();
     }
 
@@ -1031,7 +1031,7 @@ public class PdfViewerActivity extends AppCompatActivity {
             paint.setColor(0xFFFFFFFF);
             paint.setTextSize(32);
             paint.setTextAlign(Paint.Align.CENTER);
-            String label = "🔍 "" + (query.length() > 20 ? query.substring(0, 20) + "…" : query) + """;
+            String label = "Aranan: \"" + (query.length() > 20 ? query.substring(0, 20) + "..." : query) + "\"";
             canvas.drawText(label, w / 2f, top + boxH * 0.65f, paint);
             // Alt bilgi
             paint.setTextSize(22);
