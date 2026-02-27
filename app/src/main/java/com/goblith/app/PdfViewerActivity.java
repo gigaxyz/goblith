@@ -1000,7 +1000,6 @@ public class PdfViewerActivity extends AppCompatActivity {
                 }
                 // Tj/TJ metin operatörleri
                 java.util.regex.Matcher m1 = java.util.regex.Pattern.compile("\\(([^)]*)\\)\\s*Tj").matcher(streamText);
-                java.util.regex.Matcher m1 = java.util.regex.Pattern.compile("\\(([^)]*)\\)\\s*Tj").matcher(streamText);
                 while (m1.find()) allText.append(m1.group(1)).append(" ");
                 java.util.regex.Matcher m2 = java.util.regex.Pattern.compile("\\[([^\\]]*)\\]\\s*TJ").matcher(streamText);
                 while (m2.find()) {
