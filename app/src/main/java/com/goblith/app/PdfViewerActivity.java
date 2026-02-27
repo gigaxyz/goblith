@@ -889,10 +889,11 @@ public class PdfViewerActivity extends AppCompatActivity {
                         .openInputStream(android.net.Uri.parse(pdfUri));
                     if (is == null) return -1;
                     java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
-                    byte[] tmp = new byte[4096]; int n;
+                    byte[] tmp = new byte[8192]; int n;
                     while ((n = is.read(tmp)) != -1) buf.write(tmp, 0, n);
                     is.close();
                     byte[] pdfBytes = buf.toByteArray();
+                    if (pdfBytes.length == 0) return -1;
                     android.graphics.pdf.PdfRenderer renderer = new android.graphics.pdf.PdfRenderer(
                         getContentResolver().openFileDescriptor(android.net.Uri.parse(pdfUri), "r"));
                     int totalPages = renderer.getPageCount();
@@ -919,7 +920,10 @@ public class PdfViewerActivity extends AppCompatActivity {
                         }
                     }
                     return bestPage;
-                } catch (Exception e) { return -1; }
+                } catch (Exception e) {
+                    android.util.Log.e("PdfSearch", "Hata: " + e.getMessage(), e);
+                    return -1;
+                }
             }
             private String[] extractPageTexts(byte[] pdfBytes, int totalPages) {
                 String[] texts = new String[totalPages];
@@ -1012,7 +1016,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                     return;
                 }
                 if (result < 0) {
-                    Toast.makeText(PdfViewerActivity.this, "Hata olustu", Toast.LENGTH_LONG).show();
+                    Toast.makeText(PdfViewerActivity.this, "PDF okunamadi veya metin bulunamadi. Bu PDF taranmis gorsel olabilir.", Toast.LENGTH_LONG).show();
                     return;
                 }
                 Toast.makeText(PdfViewerActivity.this,
