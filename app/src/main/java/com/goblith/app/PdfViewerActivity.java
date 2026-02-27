@@ -879,153 +879,145 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     private void doFuzzyPdfSearch(String query) {
         Toast.makeText(this, "Aranıyor...", Toast.LENGTH_SHORT).show();
-        new AsyncTask<String, Void, Integer>() {
-            @Override
-            protected Integer doInBackground(String... params) {
-                try {
-                    String q = normalizeText(params[0]);
-                    String[] qWords = q.split("\\s+");
-                    java.io.InputStream is = getContentResolver()
-                        .openInputStream(android.net.Uri.parse(pdfUri));
-                    if (is == null) return -1;
-                    java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
-                    byte[] tmp = new byte[8192]; int n;
-                    while ((n = is.read(tmp)) != -1) buf.write(tmp, 0, n);
-                    is.close();
-                    byte[] pdfBytes = buf.toByteArray();
-                    if (pdfBytes.length == 0) return -1;
-                    android.graphics.pdf.PdfRenderer renderer = new android.graphics.pdf.PdfRenderer(
-                        getContentResolver().openFileDescriptor(android.net.Uri.parse(pdfUri), "r"));
-                    int totalPages = renderer.getPageCount();
-                    renderer.close();
-                    String[] pageTexts = extractPageTexts(pdfBytes, totalPages);
-                    // Tüm sayfaları skora göre değerlendir
+        final String fQuery = query;
+        new Thread(() -> {
+            int result = -1;
+            String errorMsg = "Hata oluştu";
+            try {
+                String q = normalizeText(fQuery);
+                String[] qWords = q.split("\\s+");
+
+                // PDF byte'larını oku
+                java.io.InputStream is = getContentResolver()
+                    .openInputStream(android.net.Uri.parse(pdfUri));
+                if (is == null) { errorMsg = "PDF açılamadı"; throw new Exception("null stream"); }
+                java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+                byte[] tmp = new byte[8192]; int n;
+                while ((n = is.read(tmp)) != -1) buf.write(tmp, 0, n);
+                is.close();
+                byte[] pdfBytes = buf.toByteArray();
+                if (pdfBytes.length == 0) { errorMsg = "PDF boş"; throw new Exception("empty"); }
+
+                // Sayfa sayısı
+                android.os.ParcelFileDescriptor pfd = getContentResolver()
+                    .openFileDescriptor(android.net.Uri.parse(pdfUri), "r");
+                if (pfd == null) { errorMsg = "PFD açılamadı"; throw new Exception("null pfd"); }
+                android.graphics.pdf.PdfRenderer renderer = new android.graphics.pdf.PdfRenderer(pfd);
+                int totalPages = renderer.getPageCount();
+                renderer.close();
+                pfd.close();
+
+                // Tüm PDF metnini çıkar
+                String fullText = extractAllText(pdfBytes);
+
+                if (fullText.trim().isEmpty()) {
+                    result = -2; // metin yok
+                } else {
+                    // Her sayfayı yaklaşık eşit parçalara böl
+                    int chunkSize = Math.max(1, fullText.length() / Math.max(totalPages, 1));
                     java.util.List<int[]> candidates = new java.util.ArrayList<>();
-                    for (int p = 0; p < pageTexts.length; p++) {
-                        double score = fuzzyScore(qWords, normalizeText(pageTexts[p]));
-                        if (score >= 0.1) candidates.add(new int[]{p, (int)(score * 1000)});
-                    }
-                    if (candidates.isEmpty()) return -2;
-                    // En yüksek skoru bul
-                    int maxScore = 0;
-                    for (int[] cand : candidates) if (cand[1] > maxScore) maxScore = cand[1];
-                    // Aynı veya yakın skordaki adaylar arasından mevcut sayfaya en yakın olanı seç
-                    int threshold = (int)(maxScore * 0.7);
-                    int bestPage = candidates.get(0)[0];
-                    int minDist = Integer.MAX_VALUE;
-                    for (int[] cand : candidates) {
-                        if (cand[1] >= threshold) {
-                            int dist = Math.abs(cand[0] - currentPage);
-                            if (dist < minDist) { minDist = dist; bestPage = cand[0]; }
-                        }
-                    }
-                    return bestPage;
-                } catch (Exception e) {
-                    android.util.Log.e("PdfSearch", "Hata: " + e.getMessage(), e);
-                    return -1;
-                }
-            }
-            private String[] extractPageTexts(byte[] pdfBytes, int totalPages) {
-                String[] texts = new String[totalPages];
-                for (int i = 0; i < totalPages; i++) texts[i] = "";
-                try {
-                    String raw = new String(pdfBytes, "ISO-8859-1");
-                    StringBuilder allText = new StringBuilder();
-                    int pos = 0;
-                    while (pos < raw.length()) {
-                        int s1 = raw.indexOf("stream\n", pos);
-                        int s2 = raw.indexOf("stream\r\n", pos);
-                        int streamStart = (s1 < 0) ? s2 : (s2 < 0) ? s1 : Math.min(s1, s2);
-                        if (streamStart < 0) break;
-                        int dataStart = raw.indexOf("\n", streamStart) + 1;
-                        int streamEnd = raw.indexOf("endstream", dataStart);
-                        if (streamEnd < 0) break;
-                        int objStart = raw.lastIndexOf("obj", streamStart);
-                        String objHeader = objStart >= 0 ? raw.substring(objStart, streamStart) : "";
-                        boolean isFlate = objHeader.contains("FlateDecode") || objHeader.contains("/Fl ");
-                        String streamText = "";
-                        if (isFlate) {
-                            try {
-                                byte[] compressed = raw.substring(dataStart, streamEnd).getBytes("ISO-8859-1");
-                                java.util.zip.Inflater inf = new java.util.zip.Inflater();
-                                inf.setInput(compressed);
-                                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-                                byte[] outBuf = new byte[4096];
-                                while (!inf.finished()) {
-                                    int len = inf.inflate(outBuf);
-                                    if (len == 0) break;
-                                    out.write(outBuf, 0, len);
-                                }
-                                inf.end();
-                                streamText = out.toString("UTF-8");
-                            } catch (Exception e) {
-                                try {
-                                    byte[] compressed = raw.substring(dataStart, streamEnd).getBytes("ISO-8859-1");
-                                    java.util.zip.Inflater inf = new java.util.zip.Inflater();
-                                    inf.setInput(compressed);
-                                    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-                                    byte[] outBuf = new byte[4096];
-                                    while (!inf.finished()) {
-                                        int len = inf.inflate(outBuf);
-                                        if (len == 0) break;
-                                        out.write(outBuf, 0, len);
-                                    }
-                                    inf.end();
-                                    streamText = out.toString("ISO-8859-1");
-                                } catch (Exception ignored) {}
-                            }
-                        } else {
-                            streamText = raw.substring(dataStart, streamEnd);
-                        }
-                        allText.append(extractTextFromStream(streamText)).append(" ");
-                        pos = streamEnd + 9;
-                    }
-                    String full = allText.toString().trim();
-                    if (full.isEmpty()) full = extractRawText(raw);
-                    int chunkSize = Math.max(1, full.length() / Math.max(totalPages, 1));
                     for (int p = 0; p < totalPages; p++) {
-                        int start = p * chunkSize;
-                        int end = Math.min(start + chunkSize, full.length());
-                        if (start < full.length()) texts[p] = full.substring(start, end);
+                        int start2 = p * chunkSize;
+                        int end2 = Math.min(start2 + chunkSize + 200, fullText.length());
+                        if (start2 >= fullText.length()) break;
+                        String pageText = normalizeText(fullText.substring(start2, end2));
+                        double score = fuzzyScore(qWords, pageText);
+                        if (score >= 0.05) candidates.add(new int[]{p, (int)(score * 1000)});
                     }
-                } catch (Exception ignored) {}
-                return texts;
+                    if (candidates.isEmpty()) {
+                        result = -2;
+                    } else {
+                        int maxScore = 0;
+                        for (int[] cand : candidates) if (cand[1] > maxScore) maxScore = cand[1];
+                        int threshold = (int)(maxScore * 0.6);
+                        int bestPage = candidates.get(0)[0];
+                        int minDist = Integer.MAX_VALUE;
+                        for (int[] cand : candidates) {
+                            if (cand[1] >= threshold) {
+                                int dist = Math.abs(cand[0] - currentPage);
+                                if (dist < minDist) { minDist = dist; bestPage = cand[0]; }
+                            }
+                        }
+                        result = bestPage;
+                    }
+                }
+            } catch (Exception e) {
+                android.util.Log.e("PdfSearch", errorMsg, e);
             }
-            private String extractTextFromStream(String stream) {
-                if (stream == null || stream.isEmpty()) return "";
-                StringBuilder sb = new StringBuilder();
-                java.util.regex.Matcher m1 = java.util.regex.Pattern.compile("\\(([^)]*)\\)\\s*Tj").matcher(stream);
-                while (m1.find()) sb.append(m1.group(1)).append(" ");
-                java.util.regex.Matcher m2 = java.util.regex.Pattern.compile("\\[([^\\]]*)\\]\\s*TJ").matcher(stream);
+
+            final int finalResult = result;
+            final String finalError = errorMsg;
+            runOnUiThread(() -> {
+                if (finalResult == -2) {
+                    Toast.makeText(this, "Eşleşme bulunamadı", Toast.LENGTH_LONG).show();
+                } else if (finalResult < 0) {
+                    Toast.makeText(this, finalError, Toast.LENGTH_LONG).show();
+                } else {
+                    Toast.makeText(this, "Sayfa " + (finalResult + 1) + " civarında bulundu", Toast.LENGTH_LONG).show();
+                    showPage(finalResult);
+                    new Handler().postDelayed(() -> showSearchOverlay(fQuery), 600);
+                }
+            });
+        }).start();
+    }
+
+    private String extractAllText(byte[] pdfBytes) {
+        StringBuilder allText = new StringBuilder();
+        try {
+            String raw = new String(pdfBytes, "ISO-8859-1");
+            int pos = 0;
+            while (pos < raw.length()) {
+                int s1 = raw.indexOf("stream
+", pos);
+                int s2 = raw.indexOf("stream
+", pos);
+                int streamStart = (s1 < 0) ? s2 : (s2 < 0) ? s1 : Math.min(s1, s2);
+                if (streamStart < 0) break;
+                int dataStart = raw.indexOf("
+", streamStart) + 1;
+                int streamEnd = raw.indexOf("endstream", dataStart);
+                if (streamEnd < 0 || dataStart >= streamEnd) { pos = streamStart + 7; continue; }
+                int objStart = raw.lastIndexOf("obj", streamStart);
+                String objHeader = objStart >= 0 ? raw.substring(Math.max(0, objStart), streamStart) : "";
+                boolean isFlate = objHeader.contains("FlateDecode") || objHeader.contains("/Fl ");
+                String streamText = "";
+                if (isFlate) {
+                    try {
+                        byte[] compressed = raw.substring(dataStart, streamEnd).getBytes("ISO-8859-1");
+                        java.util.zip.Inflater inf = new java.util.zip.Inflater();
+                        inf.setInput(compressed);
+                        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+                        byte[] outBuf = new byte[4096];
+                        int len;
+                        while (!inf.finished() && !inf.needsInput()) {
+                            len = inf.inflate(outBuf);
+                            if (len > 0) out.write(outBuf, 0, len);
+                        }
+                        inf.end();
+                        byte[] decoded = out.toByteArray();
+                        try { streamText = new String(decoded, "UTF-8"); }
+                        catch (Exception e) { streamText = new String(decoded, "ISO-8859-1"); }
+                    } catch (Exception ignored) {}
+                } else {
+                    streamText = raw.substring(dataStart, streamEnd);
+                }
+                // Tj/TJ metin operatörleri
+                java.util.regex.Matcher m1 = java.util.regex.Pattern.compile("\(([^)]*)\)\s*Tj").matcher(streamText);
+                while (m1.find()) allText.append(m1.group(1)).append(" ");
+                java.util.regex.Matcher m2 = java.util.regex.Pattern.compile("\[([^\]]*)\]\s*TJ").matcher(streamText);
                 while (m2.find()) {
-                    java.util.regex.Matcher m3 = java.util.regex.Pattern.compile("\\(([^)]*)\\)").matcher(m2.group(1));
-                    while (m3.find()) sb.append(m3.group(1)).append(" ");
+                    java.util.regex.Matcher m3 = java.util.regex.Pattern.compile("\(([^)]*)\)").matcher(m2.group(1));
+                    while (m3.find()) allText.append(m3.group(1)).append(" ");
                 }
-                return sb.toString();
+                pos = streamEnd + 9;
             }
-            private String extractRawText(String raw) {
-                StringBuilder sb = new StringBuilder();
-                java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\(([\\x20-\\x7E]{3,})\\)").matcher(raw);
-                while (m.find()) sb.append(m.group(1)).append(" ");
-                return sb.toString();
+            // Hiç metin çıkmadıysa ham metin dene
+            if (allText.toString().trim().isEmpty()) {
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("\(([\x20-\x7E]{3,})\)").matcher(new String(pdfBytes, "ISO-8859-1"));
+                while (m.find()) allText.append(m.group(1)).append(" ");
             }
-            @Override
-            protected void onPostExecute(Integer result) {
-                if (result == -2) {
-                    Toast.makeText(PdfViewerActivity.this, "Eslesme bulunamadi", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                if (result < 0) {
-                    Toast.makeText(PdfViewerActivity.this, "PDF okunamadi veya metin bulunamadi. Bu PDF taranmis gorsel olabilir.", Toast.LENGTH_LONG).show();
-                    return;
-                }
-                Toast.makeText(PdfViewerActivity.this,
-                    "Sayfa " + (result + 1) + " civarinda bulundu", Toast.LENGTH_LONG).show();
-                showPage(result);
-                final String fQuery = query;
-                new Handler().postDelayed(() -> showSearchOverlay(fQuery), 600);
-            }
-        }.execute(query);
+        } catch (Exception ignored) {}
+        return allText.toString();
     }
 
 
