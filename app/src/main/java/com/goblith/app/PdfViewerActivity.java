@@ -898,12 +898,26 @@ public class PdfViewerActivity extends AppCompatActivity {
                     int totalPages = renderer.getPageCount();
                     renderer.close();
                     String[] pageTexts = extractPageTexts(pdfBytes, totalPages);
-                    int bestPage = -1; double bestScore = 0;
+                    // Tüm sayfaları skora göre değerlendir
+                    java.util.List<int[]> candidates = new java.util.ArrayList<>();
                     for (int p = 0; p < pageTexts.length; p++) {
                         double score = fuzzyScore(qWords, normalizeText(pageTexts[p]));
-                        if (score > bestScore) { bestScore = score; bestPage = p; }
+                        if (score >= 0.1) candidates.add(new int[]{p, (int)(score * 1000)});
                     }
-                    if (bestScore < 0.1) return -2;
+                    if (candidates.isEmpty()) return -2;
+                    // En yüksek skoru bul
+                    int maxScore = 0;
+                    for (int[] cand : candidates) if (cand[1] > maxScore) maxScore = cand[1];
+                    // Aynı veya yakın skordaki adaylar arasından mevcut sayfaya en yakın olanı seç
+                    int threshold = (int)(maxScore * 0.7);
+                    int bestPage = candidates.get(0)[0];
+                    int minDist = Integer.MAX_VALUE;
+                    for (int[] cand : candidates) {
+                        if (cand[1] >= threshold) {
+                            int dist = Math.abs(cand[0] - currentPage);
+                            if (dist < minDist) { minDist = dist; bestPage = cand[0]; }
+                        }
+                    }
                     return bestPage;
                 } catch (Exception e) { return -1; }
             }
