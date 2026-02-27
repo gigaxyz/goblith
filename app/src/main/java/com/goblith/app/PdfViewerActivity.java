@@ -937,7 +937,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                 Toast.makeText(PdfViewerActivity.this,
                     "Sayfa " + (result + 1) + " civarında bulundu",
                     Toast.LENGTH_LONG).show();
-                loadPage(result);
+                showPage(result);
                 final String fQuery = query;
                 new Handler().postDelayed(() -> showSearchOverlay(fQuery), 600);
             }
@@ -954,7 +954,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         // contentArea içindeki frameLayout'a ekle
         try {
             android.widget.FrameLayout frame = (android.widget.FrameLayout)
-                ((android.widget.FrameLayout) pdfImageView.getParent());
+                ((android.widget.FrameLayout) pageView.getParent());
             frame.addView(searchOverlay, lp);
         } catch (Exception e) {
             Toast.makeText(this, "İşaret eklenemedi", Toast.LENGTH_SHORT).show();
