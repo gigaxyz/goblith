@@ -967,14 +967,11 @@ public class PdfViewerActivity extends AppCompatActivity {
             String raw = new String(pdfBytes, "ISO-8859-1");
             int pos = 0;
             while (pos < raw.length()) {
-                int s1 = raw.indexOf("stream
-", pos);
-                int s2 = raw.indexOf("stream
-", pos);
+                int s1 = raw.indexOf("stream\n", pos);
+                int s2 = raw.indexOf("stream\r\n", pos);
                 int streamStart = (s1 < 0) ? s2 : (s2 < 0) ? s1 : Math.min(s1, s2);
                 if (streamStart < 0) break;
-                int dataStart = raw.indexOf("
-", streamStart) + 1;
+                int dataStart = raw.indexOf("\n", streamStart) + 1;
                 int streamEnd = raw.indexOf("endstream", dataStart);
                 if (streamEnd < 0 || dataStart >= streamEnd) { pos = streamStart + 7; continue; }
                 int objStart = raw.lastIndexOf("obj", streamStart);
@@ -1002,18 +999,19 @@ public class PdfViewerActivity extends AppCompatActivity {
                     streamText = raw.substring(dataStart, streamEnd);
                 }
                 // Tj/TJ metin operatörleri
-                java.util.regex.Matcher m1 = java.util.regex.Pattern.compile("\(([^)]*)\)\s*Tj").matcher(streamText);
+                java.util.regex.Matcher m1 = java.util.regex.Pattern.compile("\\(([^)]*)\\)\\s*Tj").matcher(streamText);
+                java.util.regex.Matcher m1 = java.util.regex.Pattern.compile("\\(([^)]*)\\)\\s*Tj").matcher(streamText);
                 while (m1.find()) allText.append(m1.group(1)).append(" ");
-                java.util.regex.Matcher m2 = java.util.regex.Pattern.compile("\[([^\]]*)\]\s*TJ").matcher(streamText);
+                java.util.regex.Matcher m2 = java.util.regex.Pattern.compile("\\[([^\\]]*)\\]\\s*TJ").matcher(streamText);
                 while (m2.find()) {
-                    java.util.regex.Matcher m3 = java.util.regex.Pattern.compile("\(([^)]*)\)").matcher(m2.group(1));
+                    java.util.regex.Matcher m3 = java.util.regex.Pattern.compile("\\(([^)]*)\\)").matcher(m2.group(1));
                     while (m3.find()) allText.append(m3.group(1)).append(" ");
                 }
                 pos = streamEnd + 9;
             }
             // Hiç metin çıkmadıysa ham metin dene
             if (allText.toString().trim().isEmpty()) {
-                java.util.regex.Matcher m = java.util.regex.Pattern.compile("\(([\x20-\x7E]{3,})\)").matcher(new String(pdfBytes, "ISO-8859-1"));
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\([\\x20-\\x7E]{3,}\\)").matcher(new String(pdfBytes, "ISO-8859-1"));
                 while (m.find()) allText.append(m.group(1)).append(" ");
             }
         } catch (Exception ignored) {}
