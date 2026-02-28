@@ -340,8 +340,6 @@ public class MainActivity extends AppCompatActivity {
         startActivity(i);
     }
 
-    @Override
-
     private android.app.ProgressDialog ocrDialog;
 
     private void startOcrIndexing(String uriStr, String fileType) {
