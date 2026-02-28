@@ -1087,6 +1087,24 @@ public class PdfViewerActivity extends AppCompatActivity {
     private Button flex(Button b,int lm){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1);lp.setMargins(lm,0,0,0);b.setLayoutParams(lp);return b;}
 
 
+
+    private void showSearchOverlay(String query) {
+        if (searchOverlay != null) {
+            try {
+                ((android.view.ViewGroup) searchOverlay.getParent()).removeView(searchOverlay);
+            } catch (Exception ignored) {}
+        }
+        searchOverlay = new SearchOverlay(this, query);
+        android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        try {
+            android.widget.FrameLayout frame = (android.widget.FrameLayout) pageView.getParent();
+            frame.addView(searchOverlay, lp);
+        } catch (Exception e) {
+            Toast.makeText(this, "Isaret eklenemedi", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private String turkishNormalize(String text) {
         if (text == null) return "";
         String s = text.toLowerCase();
