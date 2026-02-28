@@ -1065,7 +1065,7 @@ public class PdfViewerActivity extends AppCompatActivity {
             String label = query.length() > 25 ? query.substring(0, 25) + "..." : query;
             paintText.setTextSize(h * 0.022f);
             paintText.setColor(0xFFFF4444);
-            canvas.drawText("" " + label + " "", w / 2f, top - 16, paintText);
+            canvas.drawText("\"" + label + "\"", w / 2f, top - 16, paintText);
 
             paintText.setTextSize(h * 0.016f);
             paintText.setColor(0xFFFFAAAA);
@@ -1093,7 +1093,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         s = s.replace("\u0131", "i").replace("\u011f", "g");
         s = s.replace("\u015f", "s").replace("\u00f6", "o");
         s = s.replace("\u00fc", "u").replace("\u00e7", "c");
-        s = s.replaceAll("[.,!?;:()047\[\]{}\-]", " ");
+        s = s.replaceAll("[.,!?;:()\'\\[\\]{}]", " ");
         s = s.replaceAll("\\s+", " ").trim();
         return s;
     }
