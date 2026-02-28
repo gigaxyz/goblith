@@ -1044,6 +1044,22 @@ public class PdfViewerActivity extends AppCompatActivity {
     private static final float BM25_B  = 0.75f;
 
     // Türkçe basit kök bulma — yaygın ekleri sıyır
+
+    private java.util.List<String> generateTurkishVariants(String word) {
+        java.util.List<String> variants = new java.util.ArrayList<>();
+        variants.add(word);
+        if (word.length() < 3) return variants;
+        String[] suffixes = {"in","nin","un","nun","a","e","ya","ye",
+                             "da","de","ta","te","dan","den","tan","ten",
+                             "i","u","yi","yu","la","le","yla","yle",
+                             "lar","ler","lara","lere","larin","lerin",
+                             "li","lu","luk","lik","ci","cu"};
+        for (String suf : suffixes) variants.add(word + suf);
+        if (word.length() >= 5) variants.add(word.substring(0, word.length()-1));
+        if (word.length() >= 6) variants.add(word.substring(0, word.length()-2));
+        return variants;
+    }
+
     private String turkishStem(String word) {
         if (word.length() <= 4) return word;
         // Uzunluktan kısaya — en uzun eşleşen eki sıyır
