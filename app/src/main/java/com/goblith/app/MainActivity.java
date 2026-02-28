@@ -341,6 +341,70 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+
+    private android.app.ProgressDialog ocrDialog;
+
+    private void startOcrIndexing(String uriStr, String fileType) {
+        if (!fileType.equals("PDF")) return;
+        ocrDialog = new android.app.ProgressDialog(this);
+        ocrDialog.setTitle("Kitap Hazirlaniyor");
+        ocrDialog.setMessage("Sayfalar okunuyor...");
+        ocrDialog.setProgressStyle(android.app.ProgressDialog.STYLE_HORIZONTAL);
+        ocrDialog.setMax(100);
+        ocrDialog.setCancelable(false);
+        ocrDialog.show();
+        new Thread(() -> {
+            try {
+                db.execSQL("CREATE TABLE IF NOT EXISTS pdf_ocr_cache (" +
+                    "pdf_uri TEXT, page INTEGER, ocr_text TEXT, PRIMARY KEY(pdf_uri, page))");
+                android.os.ParcelFileDescriptor pfd = getContentResolver()
+                    .openFileDescriptor(android.net.Uri.parse(uriStr), "r");
+                if (pfd == null) { runOnUiThread(() -> ocrDialog.dismiss()); return; }
+                android.graphics.pdf.PdfRenderer renderer = new android.graphics.pdf.PdfRenderer(pfd);
+                int total = renderer.getPageCount();
+                com.google.mlkit.vision.text.TextRecognizer recognizer =
+                    com.google.mlkit.vision.text.TextRecognition.getClient(
+                        com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS);
+                for (int p = 0; p < total; p++) {
+                    final int prog = (int)((p + 1.0) / total * 100);
+                    final int pn = p;
+                    runOnUiThread(() -> {
+                        ocrDialog.setProgress(prog);
+                        ocrDialog.setMessage("Sayfa " + (pn+1) + " / " + total);
+                    });
+                    android.database.Cursor chk = db.rawQuery(
+                        "SELECT 1 FROM pdf_ocr_cache WHERE pdf_uri=? AND page=?",
+                        new String[]{uriStr, String.valueOf(p)});
+                    boolean cached = chk.moveToFirst(); chk.close();
+                    if (cached) continue;
+                    android.graphics.pdf.PdfRenderer.Page pg = renderer.openPage(p);
+                    android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(
+                        pg.getWidth()*3, pg.getHeight()*3, android.graphics.Bitmap.Config.ARGB_8888);
+                    new android.graphics.Canvas(bmp).drawColor(android.graphics.Color.WHITE);
+                    pg.render(bmp, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
+                    pg.close();
+                    try {
+                        com.google.mlkit.vision.text.Text vt =
+                            com.google.android.gms.tasks.Tasks.await(
+                                recognizer.process(com.google.mlkit.vision.common.InputImage.fromBitmap(bmp, 0)));
+                        android.content.ContentValues cv = new android.content.ContentValues();
+                        cv.put("pdf_uri", uriStr); cv.put("page", p); cv.put("ocr_text", vt.getText());
+                        db.insertWithOnConflict("pdf_ocr_cache", null, cv,
+                            android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE);
+                    } catch (Exception ignored) {}
+                    bmp.recycle();
+                }
+                renderer.close(); pfd.close(); recognizer.close();
+                runOnUiThread(() -> {
+                    ocrDialog.dismiss();
+                    Toast.makeText(this, "Kitap arama icin hazir!", Toast.LENGTH_SHORT).show();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> ocrDialog.dismiss());
+            }
+        }).start();
+    }
+
     protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
         if (req == PICK_FILE && res == Activity.RESULT_OK && data != null) {

@@ -65,6 +65,7 @@ public class PdfViewerActivity extends AppCompatActivity {
     private int currentPage=0, totalPages=1;
     private ImageView pageView;
     private DrawingOverlay drawingOverlay;
+    private SearchOverlay searchOverlay;
     private TextView pageInfo;
     private TextView txtContent;
     private SQLiteDatabase db;
@@ -864,6 +865,38 @@ public class PdfViewerActivity extends AppCompatActivity {
 
     // ── PDF OCR Cache + Akıllı Arama ─────────────────────────────────────────
 
+
+    private void showPdfSearchDialog() {
+        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
+        b.setTitle("PDF Metin Ara");
+        android.widget.EditText input = new android.widget.EditText(this);
+        input.setHint("Kelime veya cumle...");
+        input.setPadding(32, 24, 32, 24);
+        b.setView(input);
+        b.setPositiveButton("Ara", (d, w) -> {
+            String query = input.getText().toString().trim();
+            if (!query.isEmpty()) doFuzzyPdfSearch(query);
+        });
+        b.setNegativeButton("Iptal", null);
+        b.show();
+    }
+
+    private void showSearchOverlay(String query) {
+        if (searchOverlay != null) {
+            try { ((android.view.ViewGroup) searchOverlay.getParent()).removeView(searchOverlay); }
+            catch (Exception ignored) {}
+        }
+        searchOverlay = new SearchOverlay(this, query);
+        android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        try {
+            android.widget.FrameLayout frame = (android.widget.FrameLayout) pageView.getParent();
+            frame.addView(searchOverlay, lp);
+        } catch (Exception e) {
+            Toast.makeText(this, "Isaret eklenemedi", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void doFuzzyPdfSearch(String query) {
         final String fQuery = query.trim();
         if (fQuery.isEmpty()) return;
@@ -1277,56 +1310,8 @@ public class PdfViewerActivity extends AppCompatActivity {
 
 
 
-    private void showSearchOverlay(String query) {
-        if (searchOverlay != null) {
-            try {
-                ((android.view.ViewGroup) searchOverlay.getParent()).removeView(searchOverlay);
-            } catch (Exception ignored) {}
-        }
-        searchOverlay = new SearchOverlay(this, query);
-        android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        try {
-            android.widget.FrameLayout frame = (android.widget.FrameLayout) pageView.getParent();
-            frame.addView(searchOverlay, lp);
-        } catch (Exception e) {
-            Toast.makeText(this, "Isaret eklenemedi", Toast.LENGTH_SHORT).show();
-        }
-    }
 
-    private String turkishNormalize(String text) {
-        if (text == null) return "";
-        String s = text.toLowerCase();
-        s = s.replace("\u0131", "i").replace("\u011f", "g");
-        s = s.replace("\u015f", "s").replace("\u00f6", "o");
-        s = s.replace("\u00fc", "u").replace("\u00e7", "c");
-        s = s.replaceAll("[.,!?;:()\'\\[\\]{}]", " ");
-        s = s.replaceAll("\\s+", " ").trim();
-        return s;
-    }
 
-    private String normalizeText(String text) { return turkishNormalize(text); }
-
-    private double strictFuzzyScore(String[] queryWords, String pageText) {
-        if (pageText == null || pageText.isEmpty()) return 0;
-        String normPage = turkishNormalize(pageText);
-        int matched = 0, total = 0;
-        for (String word : queryWords) {
-            String nw = turkishNormalize(word);
-            if (nw.length() < 3) continue;
-            total += 4;
-            if (normPage.contains(nw)) { matched += 4; continue; }
-            if (nw.length() >= 5 && normPage.contains(nw.substring(0, nw.length()-1))) { matched += 2; continue; }
-            if (nw.length() >= 6 && normPage.contains(nw.substring(0, nw.length()-2))) { matched += 1; continue; }
-            int stem = (int)(nw.length() * 0.7);
-            if (stem >= 3 && normPage.contains(nw.substring(0, stem))) matched += 1;
-        }
-        if (total == 0) return 0;
-        double score = (double) matched / total;
-        return score >= 0.65 ? score : 0;
-    }
-
-    private double fuzzyScore(String[] q, String t) { return strictFuzzyScore(q, t); }
 
     // ── Intent import ─────────────────────────────────────────────────────────
 class DBHelper extends SQLiteOpenHelper{
