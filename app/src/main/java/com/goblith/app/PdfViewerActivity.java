@@ -1038,100 +1038,170 @@ public class PdfViewerActivity extends AppCompatActivity {
         return map;
     }
 
-    // Türkçe ek varyantları üret — kelimenin olası hallerini döndür
-    private java.util.List<String> generateTurkishVariants(String word) {
-        java.util.List<String> variants = new java.util.ArrayList<>();
-        variants.add(word);
-        if (word.length() < 3) return variants;
-        // Yaygın Türkçe ekler
-        String[] suffixes = {"in", "nin", "un", "nun", "a", "e", "ya", "ye",
-                             "da", "de", "ta", "te", "dan", "den", "tan", "ten",
-                             "i", "u", "yi", "yu", "la", "le", "yla", "yle",
-                             "lar", "ler", "lara", "lere", "larin", "lerin",
-                             "li", "lu", "luk", "lik", "ci", "cu", "cul"};
+    // ── BM25 + Trigram + Kök Bulma Arama Motoru ──────────────────────────────
+    // BM25 sabitleri — k1 kelime frekansı hassasiyeti, b sayfa uzunluğu normalizasyonu
+    private static final float BM25_K1 = 1.5f;
+    private static final float BM25_B  = 0.75f;
+
+    // Türkçe basit kök bulma — yaygın ekleri sıyır
+    private String turkishStem(String word) {
+        if (word.length() <= 4) return word;
+        // Uzunluktan kısaya — en uzun eşleşen eki sıyır
+        String[] suffixes = {
+            "lerin", "larin", "lerin", "ların",
+            "ların", "lerin", "ndan", "nden", "ndan",
+            "ından", "inden", "undan", "ünden",
+            "taki", "daki", "teki", "deki",
+            "yla", "yle", "ile", "dan", "den",
+            "tan", "ten", "nin", "nun", "nün", "nın",
+            "lar", "ler", "da", "de", "ta", "te",
+            "ya", "ye", "in", "un", "ün", "ın",
+            "yi", "yı", "yu", "yü", "li", "lı",
+            "lu", "lü", "ci", "cı", "cu", "cü",
+            "si", "sı", "su", "sü", "ki", "a",
+            "e", "i", "ı", "u", "ü"
+        };
         for (String suf : suffixes) {
-            variants.add(word + suf);
+            if (word.endsWith(suf) && word.length() - suf.length() >= 3) {
+                return word.substring(0, word.length() - suf.length());
+            }
         }
-        // Kök varyantları — son 1-2 harf çıkar
-        if (word.length() >= 5) variants.add(word.substring(0, word.length() - 1));
-        if (word.length() >= 6) variants.add(word.substring(0, word.length() - 2));
-        return variants;
+        return word;
     }
 
-    // Gelişmiş skor — anlam motoru + fuzzy + ek varyantları birleşik
+    // N-gram üret — bigram ve trigram
+    private java.util.List<String> generateNgrams(String[] words, int n) {
+        java.util.List<String> ngrams = new java.util.ArrayList<>();
+        for (int i = 0; i <= words.length - n; i++) {
+            StringBuilder sb = new StringBuilder();
+            for (int j = 0; j < n; j++) {
+                if (j > 0) sb.append(" ");
+                sb.append(words[i + j]);
+            }
+            ngrams.add(sb.toString());
+        }
+        return ngrams;
+    }
+
+    // BM25 term frekansı hesapla — bir kelimenin sayfada kaç kez geçtiği
+    private int termFrequency(String term, String[] pageWords) {
+        int count = 0;
+        for (String w : pageWords) if (w.equals(term)) count++;
+        return count;
+    }
+
+    // Ana skor motoru — BM25 + Trigram + Anlam + Öğrenme
     private int calcScore(java.util.List<String> words, String fullQuery, String pageText) {
         if (pageText == null || pageText.isEmpty()) return 0;
-        java.util.Map<String, String[]> semanticMap = buildSemanticMap();
-        int score = 0;
 
-        // 1. Tam cümle eşleşmesi — en kesin sonuç
+        String[] pageWords = pageText.split("\\s+");
+        int pageLen = pageWords.length;
+        // Ortalama sayfa uzunluğu — yaklaşık 300 kelime varsayıyoruz
+        float avgPageLen = 300f;
+
+        java.util.Map<String, String[]> semanticMap = buildSemanticMap();
+        double score = 0;
+
+        // ── 1. TAM CÜMLE EŞLEŞMESİ ────────────────────────────────────────
         if (pageText.contains(fullQuery)) return 10000;
 
-        // 2. Ardışık kelime çiftleri — cümle yapısını korur
-        for (int i = 0; i < words.size() - 1; i++) {
-            String bigram = words.get(i) + " " + words.get(i + 1);
-            if (pageText.contains(bigram)) score += 600;
+        // ── 2. TRİGRAM ANALİZİ ────────────────────────────────────────────
+        // Üçlü kelime grupları — "Türkiye Büyük Millet" gibi özel isimleri yakalar
+        String[] qWords = fullQuery.split("\\s+");
+        if (qWords.length >= 3) {
+            for (String trigram : generateNgrams(qWords, 3)) {
+                if (pageText.contains(trigram)) score += 800;
+            }
         }
 
-        // 3. Her kelime için çok katmanlı eşleşme
+        // ── 3. BİGRAM ANALİZİ ─────────────────────────────────────────────
+        if (qWords.length >= 2) {
+            for (String bigram : generateNgrams(qWords, 2)) {
+                if (pageText.contains(bigram)) score += 500;
+            }
+        }
+
+        // ── 4. BM25 KELİME SKORU ──────────────────────────────────────────
         int matchedWords = 0;
         for (String word : words) {
             if (word.length() < 2) continue;
-            boolean foundThisWord = false;
+            String stem = turkishStem(word);
+            boolean found = false;
 
-            // 3a. Tam kelime eşleşmesi
-            if (pageText.contains(word)) {
-                score += 10 + word.length() * 6;
+            // 4a. Tam kelime — BM25 skoru
+            int tf = termFrequency(word, pageWords);
+            if (tf > 0) {
+                // BM25 formülü: TF * (k1+1) / (TF + k1*(1-b+b*pageLen/avgPageLen))
+                double bm25 = tf * (BM25_K1 + 1) /
+                    (tf + BM25_K1 * (1 - BM25_B + BM25_B * pageLen / avgPageLen));
+                // Uzun kelimeler daha değerli — kısa kelimelere ceza
+                double lengthBonus = Math.min(word.length() / 3.0, 3.0);
+                score += bm25 * 100 * lengthBonus;
                 matchedWords++;
-                foundThisWord = true;
+                found = true;
             }
 
-            // 3b. Türkçe ek varyantları
-            if (!foundThisWord) {
+            // 4b. Kök eşleşmesi — "savaşıyordu" → "savaş" kökü
+            if (!found && stem.length() >= 3) {
+                for (String pw : pageWords) {
+                    String pwStem = turkishStem(pw);
+                    if (pwStem.equals(stem) || pw.startsWith(stem)) {
+                        score += 60;
+                        matchedWords++;
+                        found = true;
+                        break;
+                    }
+                }
+            }
+
+            // 4c. Ek varyantları
+            if (!found) {
                 for (String variant : generateTurkishVariants(word)) {
                     if (!variant.equals(word) && pageText.contains(variant)) {
-                        score += 8 + word.length() * 4;
+                        score += 40;
                         matchedWords++;
-                        foundThisWord = true;
+                        found = true;
                         break;
                     }
                 }
             }
 
-            // 3c. Anlam motoru — eş anlamlılar
-            if (!foundThisWord && semanticMap.containsKey(word)) {
+            // 4d. Anlam motoru — eş anlamlılar
+            if (!found && semanticMap.containsKey(word)) {
                 for (String synonym : semanticMap.get(word)) {
                     if (pageText.contains(synonym)) {
-                        score += 5;
+                        score += 25;
                         matchedWords++;
-                        foundThisWord = true;
+                        found = true;
                         break;
                     }
                 }
             }
 
-            // 3d. Öğrenme — bu PDF için başarılı aramaları hatırla
-            if (!foundThisWord) {
+            // 4e. Öğrenme geçmişi
+            if (!found) {
                 try {
                     android.database.Cursor lc = db.rawQuery(
                         "SELECT 1 FROM search_history WHERE pdf_uri=? AND query LIKE ? LIMIT 1",
                         new String[]{pdfUri, "%" + word + "%"});
-                    if (lc.moveToFirst()) { score += 3; matchedWords++; foundThisWord = true; }
+                    if (lc.moveToFirst()) { score += 15; matchedWords++; }
                     lc.close();
                 } catch (Exception ignored) {}
             }
         }
 
-        // 4. Eşleşme oranı filtresi
+        // ── 5. EŞLEŞme ORANI FİLTRESİ ────────────────────────────────────
+        // Çok kelimeli aramada en az %50, tek kelimede mutlaka eşleşme
         if (words.size() > 1) {
             double ratio = (double) matchedWords / words.size();
-            if (ratio < 0.5) return 0; // çok kelimeli aramada en az %50 eşleşmeli
+            if (ratio < 0.5) return 0;
         } else {
-            if (matchedWords == 0) return 0; // tek kelimede mutlaka bir eşleşme olmalı
+            if (matchedWords == 0) return 0;
         }
 
-        return score;
+        return (int) score;
     }
+
 
     // Başarılı aramayı öğren
     private void learnSearch(String query, int foundPage) {
