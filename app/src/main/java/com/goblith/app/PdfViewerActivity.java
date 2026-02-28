@@ -882,91 +882,102 @@ public class PdfViewerActivity extends AppCompatActivity {
     }
 
     private void doFuzzyPdfSearch(String query) {
-        Toast.makeText(this, "Aranıyor...", Toast.LENGTH_SHORT).show();
         final String fQuery = query;
+
+        // Yükleme dialogu
+        android.app.ProgressDialog pd = new android.app.ProgressDialog(this);
+        pd.setMessage("Aranıyor...");
+        pd.setProgressStyle(android.app.ProgressDialog.STYLE_HORIZONTAL);
+        pd.setMax(100);
+        pd.setProgress(0);
+        pd.setCancelable(false);
+        pd.show();
+
         new Thread(() -> {
             int result = -1;
-            String errorMsg = "Hata oluştu";
+            String errorMsg = "Hata olustu";
             try {
                 String q = normalizeText(fQuery);
                 String[] qWords = q.split("\\s+");
+                // Çok kısa kelimeleri filtrele
+                java.util.List<String> wordList = new java.util.ArrayList<>();
+                for (String w : qWords) { if (w.length() >= 3) wordList.add(w); }
+                if (wordList.isEmpty()) { result = -2; throw new Exception("no words"); }
+                final String[] filteredWords = wordList.toArray(new String[0]);
 
-                // PDF byte'larını oku
-                java.io.InputStream is = getContentResolver()
-                    .openInputStream(android.net.Uri.parse(pdfUri));
-                if (is == null) { errorMsg = "PDF açılamadı"; throw new Exception("null stream"); }
-                java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
-                byte[] tmp = new byte[8192]; int n;
-                while ((n = is.read(tmp)) != -1) buf.write(tmp, 0, n);
-                is.close();
-                byte[] pdfBytes = buf.toByteArray();
-                if (pdfBytes.length == 0) { errorMsg = "PDF boş"; throw new Exception("empty"); }
-
-                // Sayfa sayısı
                 android.os.ParcelFileDescriptor pfd = getContentResolver()
                     .openFileDescriptor(android.net.Uri.parse(pdfUri), "r");
-                if (pfd == null) { errorMsg = "PFD açılamadı"; throw new Exception("null pfd"); }
+                if (pfd == null) throw new Exception("null pfd");
                 android.graphics.pdf.PdfRenderer renderer = new android.graphics.pdf.PdfRenderer(pfd);
                 int totalPages = renderer.getPageCount();
-                renderer.close();
-                pfd.close();
 
-                // Tüm PDF metnini çıkar
-                // ML Kit OCR ile her sayfayı tara
-                android.graphics.pdf.PdfRenderer renderer2 = new android.graphics.pdf.PdfRenderer(
-                    getContentResolver().openFileDescriptor(android.net.Uri.parse(pdfUri), "r"));
                 java.util.List<int[]> candidates = new java.util.ArrayList<>();
                 TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+
                 for (int p = 0; p < totalPages; p++) {
-                    android.graphics.pdf.PdfRenderer.Page page = renderer2.openPage(p);
+                    final int fp = p;
+                    final int progress = (int)((p + 1.0) / totalPages * 100);
+                    runOnUiThread(() -> pd.setProgress(progress));
+
+                    android.graphics.pdf.PdfRenderer.Page page = renderer.openPage(p);
+                    // Yüksek çözünürlük — OCR için önemli
+                    int w = page.getWidth() * 2;
+                    int h = page.getHeight() * 2;
                     android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(
-                        page.getWidth() * 2, page.getHeight() * 2, android.graphics.Bitmap.Config.ARGB_8888);
-                    page.render(bmp, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                        w, h, android.graphics.Bitmap.Config.ARGB_8888);
+                    android.graphics.Canvas canvas = new android.graphics.Canvas(bmp);
+                    canvas.drawColor(android.graphics.Color.WHITE);
+                    page.render(bmp, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
                     page.close();
+
                     InputImage image = InputImage.fromBitmap(bmp, 0);
                     try {
-                        final int finalP = p;
-                        com.google.android.gms.tasks.Tasks.await(
-                            recognizer.process(image).addOnSuccessListener(visionText -> {
-                                String pageText = normalizeText(visionText.getText());
-                                double score = fuzzyScore(qWords, pageText);
-                                if (score >= 0.05) candidates.add(new int[]{finalP, (int)(score * 1000)});
-                            })
-                        );
+                        com.google.mlkit.vision.text.Text visionText =
+                            com.google.android.gms.tasks.Tasks.await(recognizer.process(image));
+                        String pageText = normalizeText(visionText.getText());
+                        double score = strictFuzzyScore(filteredWords, pageText);
+                        if (score > 0) candidates.add(new int[]{fp, (int)(score * 1000)});
                     } catch (Exception ignored) {}
                     bmp.recycle();
                 }
-                renderer2.close();
+                renderer.close();
+                pfd.close();
                 recognizer.close();
+
                 if (candidates.isEmpty()) {
                     result = -2;
                 } else {
+                    // En yüksek skoru bul
                     int maxScore = 0;
                     for (int[] cand : candidates) if (cand[1] > maxScore) maxScore = cand[1];
-                    int threshold = (int)(maxScore * 0.6);
+                    // Sadece %80 ve üzeri skordaki adayları kabul et
+                    int threshold = (int)(maxScore * 0.8);
                     int bestPage = candidates.get(0)[0];
                     int minDist = Integer.MAX_VALUE;
                     for (int[] cand : candidates) {
                         if (cand[1] >= threshold) {
                             int dist = Math.abs(cand[0] - currentPage);
-                            if (dist < minDist) { minDist = dist; bestPage = cand[0]; }
+                            if (dist < minDist || (dist == minDist && cand[1] > candidates.get(0)[1])) {
+                                minDist = dist;
+                                bestPage = cand[0];
+                            }
                         }
                     }
                     result = bestPage;
                 }
             } catch (Exception e) {
-                android.util.Log.e("PdfSearch", errorMsg, e);
+                android.util.Log.e("PdfSearch", errorMsg + ": " + e.getMessage());
             }
 
             final int finalResult = result;
-            final String finalError = errorMsg;
             runOnUiThread(() -> {
+                pd.dismiss();
                 if (finalResult == -2) {
-                    Toast.makeText(this, "Eşleşme bulunamadı", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "Esleme bulunamadi", Toast.LENGTH_LONG).show();
                 } else if (finalResult < 0) {
-                    Toast.makeText(this, finalError, Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "PDF okunamadi", Toast.LENGTH_LONG).show();
                 } else {
-                    Toast.makeText(this, "Sayfa " + (finalResult + 1) + " civarında bulundu", Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "Sayfa " + (finalResult + 1) + " bulundu", Toast.LENGTH_SHORT).show();
                     showPage(finalResult);
                     new Handler().postDelayed(() -> showSearchOverlay(fQuery), 600);
                 }
@@ -974,11 +985,31 @@ public class PdfViewerActivity extends AppCompatActivity {
         }).start();
     }
 
-    private String extractAllText(byte[] pdfBytes) {
-        // ML Kit ile OCR — bu metod artık kullanılmıyor
-        // doFuzzyPdfSearch direkt ML Kit kullanıyor
-        return "";
+    // Daha sıkı fuzzy skor — kısa kelime eşleşmesini cezalandır
+    private double strictFuzzyScore(String[] queryWords, String pageText) {
+        if (pageText == null || pageText.isEmpty()) return 0;
+        int matched = 0;
+        int total = 0;
+        for (String word : queryWords) {
+            if (word.length() < 3) continue;
+            total += 3;
+            if (pageText.contains(word)) {
+                matched += 3; // tam eşleşme en yüksek puan
+            } else if (word.length() >= 5 && pageText.contains(word.substring(0, word.length() - 1))) {
+                matched += 2; // son harf eksik
+            } else if (word.length() >= 5 && pageText.contains(word.substring(0, word.length() - 2))) {
+                matched += 1; // son iki harf eksik
+            }
+        }
+        if (total == 0) return 0;
+        double score = (double) matched / total;
+        // En az %60 eşleşme zorunlu
+        return score >= 0.6 ? score : 0;
     }
+
+    private String extractAllText(byte[] pdfBytes) { return ""; }
+
+
 
 
 
@@ -1021,9 +1052,11 @@ public class PdfViewerActivity extends AppCompatActivity {
         return queryWords.length > 0 ? (double) matched / (queryWords.length * 2) : 0;
     }
 
-    // Yanıp sönen arama işareti overlay
+    // Yanıp sönen arama işareti overlay — kırmızı çerçeve
     class SearchOverlay extends View {
-        private Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private Paint paintFill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private Paint paintBorder = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private Paint paintText = new Paint(Paint.ANTI_ALIAS_FLAG);
         private boolean visible = true;
         private Handler handler = new Handler();
         private String query;
@@ -1031,7 +1064,7 @@ public class PdfViewerActivity extends AppCompatActivity {
             @Override public void run() {
                 visible = !visible;
                 invalidate();
-                handler.postDelayed(this, 600);
+                handler.postDelayed(this, 500);
             }
         };
 
@@ -1039,13 +1072,24 @@ public class PdfViewerActivity extends AppCompatActivity {
             super(ctx);
             this.query = q;
             setBackgroundColor(android.graphics.Color.TRANSPARENT);
+
+            paintFill.setColor(0x33FF0000); // yarı saydam kırmızı
+            paintFill.setStyle(Paint.Style.FILL);
+
+            paintBorder.setColor(0xFFFF2222); // parlak kırmızı kenarlık
+            paintBorder.setStyle(Paint.Style.STROKE);
+            paintBorder.setStrokeWidth(6);
+
+            paintText.setColor(0xFFFFFFFF);
+            paintText.setTextAlign(Paint.Align.CENTER);
+            paintText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+
             handler.post(blink);
             setOnClickListener(v -> {
                 handler.removeCallbacks(blink);
                 android.view.ViewGroup parent = (android.view.ViewGroup) getParent();
                 if (parent != null) parent.removeView(this);
                 searchOverlay = null;
-                Toast.makeText(ctx, "İşaret kaldırıldı", Toast.LENGTH_SHORT).show();
             });
         }
 
@@ -1054,30 +1098,46 @@ public class PdfViewerActivity extends AppCompatActivity {
             super.onDraw(canvas);
             if (!visible) return;
             int w = getWidth(), h = getHeight();
-            // Ortada yanıp sönen kutu
-            paint.setColor(0x884488FF);
-            paint.setStyle(Paint.Style.FILL);
-            float boxH = h * 0.08f;
-            float top  = h * 0.35f;
-            canvas.drawRect(w * 0.05f, top, w * 0.95f, top + boxH, paint);
-            // Kenarlık
-            paint.setColor(0xFF4488FF);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(4);
-            canvas.drawRect(w * 0.05f, top, w * 0.95f, top + boxH, paint);
+
+            // Sayfa ortasında %20 yüksekliğinde dikdörtgen
+            float left   = w * 0.04f;
+            float right  = w * 0.96f;
+            float top    = h * 0.30f;
+            float bottom = h * 0.50f;
+
+            // Kırmızı yarı saydam dolgu
+            canvas.drawRect(left, top, right, bottom, paintFill);
+            // Kırmızı kenarlık
+            canvas.drawRect(left, top, right, bottom, paintBorder);
+
+            // Köşe işaretleri
+            float cs = 30f;
+            paintBorder.setStrokeWidth(8);
+            // Sol üst
+            canvas.drawLine(left, top, left + cs, top, paintBorder);
+            canvas.drawLine(left, top, left, top + cs, paintBorder);
+            // Sağ üst
+            canvas.drawLine(right, top, right - cs, top, paintBorder);
+            canvas.drawLine(right, top, right, top + cs, paintBorder);
+            // Sol alt
+            canvas.drawLine(left, bottom, left + cs, bottom, paintBorder);
+            canvas.drawLine(left, bottom, left, bottom - cs, paintBorder);
+            // Sağ alt
+            canvas.drawLine(right, bottom, right - cs, bottom, paintBorder);
+            canvas.drawLine(right, bottom, right, bottom - cs, paintBorder);
+
             // Metin
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(0xFFFFFFFF);
-            paint.setTextSize(32);
-            paint.setTextAlign(Paint.Align.CENTER);
-            String label = "Aranan: \"" + (query.length() > 20 ? query.substring(0, 20) + "..." : query) + "\"";
-            canvas.drawText(label, w / 2f, top + boxH * 0.65f, paint);
-            // Alt bilgi
-            paint.setTextSize(22);
-            paint.setColor(0xFFAABBFF);
-            canvas.drawText("Kapatmak için dokun", w / 2f, top + boxH + 36, paint);
+            String label = query.length() > 25 ? query.substring(0, 25) + "..." : query;
+            paintText.setTextSize(h * 0.022f);
+            paintText.setColor(0xFFFF4444);
+            canvas.drawText("" " + label + " "", w / 2f, top - 16, paintText);
+
+            paintText.setTextSize(h * 0.016f);
+            paintText.setColor(0xFFFFAAAA);
+            canvas.drawText("Kapatmak icin dokun", w / 2f, bottom + 36, paintText);
         }
     }
+
 
 
     // ── Buton yardımcıları ────────────────────────────────────────────────────
