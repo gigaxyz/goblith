@@ -3,6 +3,10 @@ package com.goblith.app;
 import android.app.Activity;
 import android.content.ContentValues;
 import android.content.Intent;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.TextRecognition;
+import com.google.mlkit.vision.text.TextRecognizer;
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
@@ -352,6 +356,7 @@ public class MainActivity extends AppCompatActivity {
             val.put("last_page",   0);
             val.put("last_opened", new java.util.Date().toString());
             db.insertWithOnConflict("library", null, val, SQLiteDatabase.CONFLICT_REPLACE);
+            startOcrIndexing(uriStr, type);
             openFile(uriStr, 0, type);
         }
     }

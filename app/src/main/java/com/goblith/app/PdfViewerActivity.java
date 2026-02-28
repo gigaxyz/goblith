@@ -862,130 +862,319 @@ public class PdfViewerActivity extends AppCompatActivity {
         b.setNegativeButton("İptal",null);b.show();
     }
 
-    // ── PDF Metin Arama ───────────────────────────────────────────────────────
-    private SearchOverlay searchOverlay;
-
-    private void showPdfSearchDialog() {
-        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
-        b.setTitle("PDF'de Metin Ara");
-        android.widget.EditText input = new android.widget.EditText(this);
-        input.setHint("Aramak istediğin cümle veya kelime...");
-        input.setPadding(32, 24, 32, 24);
-        b.setView(input);
-        b.setPositiveButton("Ara", (d, w) -> {
-            String query = input.getText().toString().trim();
-            if (query.isEmpty()) return;
-            doFuzzyPdfSearch(query);
-        });
-        b.setNegativeButton("İptal", null);
-        b.show();
-    }
+    // ── PDF OCR Cache + Akıllı Arama ─────────────────────────────────────────
 
     private void doFuzzyPdfSearch(String query) {
-        final String fQuery = query;
+        final String fQuery = query.trim();
+        if (fQuery.isEmpty()) return;
 
-        // Yükleme dialogu
         android.app.ProgressDialog pd = new android.app.ProgressDialog(this);
-        pd.setMessage("Aranıyor...");
+        pd.setMessage("Kontrol ediliyor...");
         pd.setProgressStyle(android.app.ProgressDialog.STYLE_HORIZONTAL);
         pd.setMax(100);
-        pd.setProgress(0);
         pd.setCancelable(false);
         pd.show();
 
         new Thread(() -> {
-            int result = -1;
-            String errorMsg = "Hata olustu";
             try {
-                String q = normalizeText(fQuery);
-                String[] qWords = q.split("\\s+");
-                // Çok kısa kelimeleri filtrele
-                java.util.List<String> wordList = new java.util.ArrayList<>();
-                for (String w : qWords) { if (w.length() >= 3) wordList.add(w); }
-                if (wordList.isEmpty()) { result = -2; throw new Exception("no words"); }
-                final String[] filteredWords = wordList.toArray(new String[0]);
-
+                // 1. Önce DB cache'e bak
+                ensureOcrCacheTable();
+                int cachedPages = getCachedPageCount();
                 android.os.ParcelFileDescriptor pfd = getContentResolver()
                     .openFileDescriptor(android.net.Uri.parse(pdfUri), "r");
-                if (pfd == null) throw new Exception("null pfd");
+                if (pfd == null) { runOnUiThread(() -> { pd.dismiss(); Toast.makeText(this, "PDF acilamadi", Toast.LENGTH_SHORT).show(); }); return; }
                 android.graphics.pdf.PdfRenderer renderer = new android.graphics.pdf.PdfRenderer(pfd);
                 int totalPages = renderer.getPageCount();
 
-                java.util.List<int[]> candidates = new java.util.ArrayList<>();
-                TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+                // 2. Cache eksikse OCR ile tara ve kaydet
+                if (cachedPages < totalPages) {
+                    runOnUiThread(() -> pd.setMessage("Kitap taranıyor... (ilk seferlik)"));
+                    TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+                    for (int p = 0; p < totalPages; p++) {
+                        if (isPageCached(p)) continue;
+                        final int prog = (int)((p + 1.0) / totalPages * 100);
+                        runOnUiThread(() -> pd.setProgress(prog));
 
-                for (int p = 0; p < totalPages; p++) {
-                    final int fp = p;
-                    final int progress = (int)((p + 1.0) / totalPages * 100);
-                    runOnUiThread(() -> pd.setProgress(progress));
-
-                    android.graphics.pdf.PdfRenderer.Page page = renderer.openPage(p);
-                    // Yüksek çözünürlük — OCR için önemli
-                    int w = page.getWidth() * 3;
-                    int h = page.getHeight() * 3;
-                    android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(
-                        w, h, android.graphics.Bitmap.Config.ARGB_8888);
-                    android.graphics.Canvas canvas = new android.graphics.Canvas(bmp);
-                    canvas.drawColor(android.graphics.Color.WHITE);
-                    page.render(bmp, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
-                    page.close();
-
-                    InputImage image = InputImage.fromBitmap(bmp, 0);
-                    try {
-                        com.google.mlkit.vision.text.Text visionText =
-                            com.google.android.gms.tasks.Tasks.await(recognizer.process(image));
-                        String pageText = normalizeText(visionText.getText());
-                        double score = strictFuzzyScore(filteredWords, pageText);
-                        if (score > 0) candidates.add(new int[]{fp, (int)(score * 1000)});
-                    } catch (Exception ignored) {}
-                    bmp.recycle();
+                        android.graphics.pdf.PdfRenderer.Page pg = renderer.openPage(p);
+                        int bw = pg.getWidth() * 3, bh = pg.getHeight() * 3;
+                        android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
+                        android.graphics.Canvas cv = new android.graphics.Canvas(bmp);
+                        cv.drawColor(android.graphics.Color.WHITE);
+                        pg.render(bmp, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
+                        pg.close();
+                        try {
+                            com.google.mlkit.vision.text.Text vt = com.google.android.gms.tasks.Tasks.await(
+                                recognizer.process(InputImage.fromBitmap(bmp, 0)));
+                            savePageOcr(p, vt.getText());
+                        } catch (Exception ignored) { savePageOcr(p, ""); }
+                        bmp.recycle();
+                    }
+                    recognizer.close();
                 }
                 renderer.close();
                 pfd.close();
-                recognizer.close();
 
-                if (candidates.isEmpty()) {
-                    result = -2;
-                } else {
-                    // En yüksek skoru bul
-                    int maxScore = 0;
-                    for (int[] cand : candidates) if (cand[1] > maxScore) maxScore = cand[1];
-                    // Sadece %80 ve üzeri skordaki adayları kabul et
-                    int threshold = (int)(maxScore * 0.8);
-                    int bestPage = candidates.get(0)[0];
-                    int minDist = Integer.MAX_VALUE;
-                    for (int[] cand : candidates) {
-                        if (cand[1] >= threshold) {
-                            int dist = Math.abs(cand[0] - currentPage);
-                            if (dist < minDist || (dist == minDist && cand[1] > candidates.get(0)[1])) {
-                                minDist = dist;
-                                bestPage = cand[0];
-                            }
-                        }
-                    }
-                    result = bestPage;
+                // 3. Akıllı arama — normalize edilmiş metin üzerinde
+                runOnUiThread(() -> { pd.setMessage("Aranıyor..."); pd.setProgress(100); });
+                String normQuery = turkishNormalize(fQuery);
+                String[] qWords = normQuery.split("\\s+");
+                java.util.List<String> validWords = new java.util.ArrayList<>();
+                for (String w : qWords) if (w.length() >= 2) validWords.add(w);
+                if (validWords.isEmpty()) {
+                    runOnUiThread(() -> { pd.dismiss(); Toast.makeText(this, "Cok kisa kelime", Toast.LENGTH_SHORT).show(); });
+                    return;
                 }
+
+                // Tüm sayfalar için skor hesapla
+                java.util.List<int[]> results = new java.util.ArrayList<>(); // [sayfa, skor]
+                android.database.Cursor cur = db.rawQuery(
+                    "SELECT page, ocr_text FROM pdf_ocr_cache WHERE pdf_uri=? ORDER BY page ASC",
+                    new String[]{pdfUri});
+                while (cur.moveToNext()) {
+                    int pageNum = cur.getInt(0);
+                    String ocrText = turkishNormalize(cur.getString(1));
+                    int score = calcScore(validWords, normQuery, ocrText);
+                    if (score > 0) results.add(new int[]{pageNum, score});
+                }
+                cur.close();
+
+                if (results.isEmpty()) {
+                    runOnUiThread(() -> { pd.dismiss(); Toast.makeText(this, "Esleme bulunamadi", Toast.LENGTH_LONG).show(); });
+                    return;
+                }
+
+                // En yüksek skoru bul
+                int maxScore = 0;
+                for (int[] r : results) if (r[1] > maxScore) maxScore = r[1];
+
+                // Sadece max skora eşit sayfaları kabul et (çok sıkı filtre)
+                java.util.List<Integer> topPages = new java.util.ArrayList<>();
+                for (int[] r : results) {
+                    if (r[1] == maxScore) topPages.add(r[0]);
+                }
+
+                // Mevcut sayfaya en yakın olanı seç
+                int bestPage = topPages.get(0);
+                int minDist = Math.abs(topPages.get(0) - currentPage);
+                for (int pg : topPages) {
+                    int dist = Math.abs(pg - currentPage);
+                    if (dist < minDist) { minDist = dist; bestPage = pg; }
+                }
+
+                final int finalPage = bestPage;
+                runOnUiThread(() -> {
+                    pd.dismiss();
+                    Toast.makeText(this, "Sayfa " + (finalPage + 1) + " bulundu", Toast.LENGTH_SHORT).show();
+                    learnSearch(fQuery, finalPage);
+                    showPage(finalPage);
+                    new Handler().postDelayed(() -> showSearchOverlay(fQuery), 500);
+                });
+
             } catch (Exception e) {
-                android.util.Log.e("PdfSearch", errorMsg + ": " + e.getMessage());
+                android.util.Log.e("PdfSearch", "Hata: " + e.getMessage(), e);
+                runOnUiThread(() -> { pd.dismiss(); Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show(); });
             }
-
-            final int finalResult = result;
-            runOnUiThread(() -> {
-                pd.dismiss();
-                if (finalResult == -2) {
-                    Toast.makeText(this, "Esleme bulunamadi", Toast.LENGTH_LONG).show();
-                } else if (finalResult < 0) {
-                    Toast.makeText(this, "PDF okunamadi", Toast.LENGTH_LONG).show();
-                } else {
-                    Toast.makeText(this, "Sayfa " + (finalResult + 1) + " bulundu", Toast.LENGTH_SHORT).show();
-                    showPage(finalResult);
-                    new Handler().postDelayed(() -> showSearchOverlay(fQuery), 600);
-                }
-            });
         }).start();
     }
 
-    // Daha sıkı fuzzy skor — kısa kelime eşleşmesini cezalandır
+    // ── Anlam Motoru ──────────────────────────────────────────────────────────
+    // Türkçe eş anlamlı ve kavram genişletme sözlüğü
+    private java.util.Map<String, String[]> buildSemanticMap() {
+        java.util.Map<String, String[]> map = new java.util.HashMap<>();
+        // Savaş/Çatışma
+        map.put("savas", new String[]{"muharebe", "harp", "catisma", "saldiri", "mucadele"});
+        map.put("muharebe", new String[]{"savas", "harp", "catisma"});
+        // Devlet/Yönetim
+        map.put("devlet", new String[]{"hukumet", "idare", "yonetim", "saltanat"});
+        map.put("hukumet", new String[]{"devlet", "idare", "yonetim"});
+        map.put("padisah", new String[]{"sultan", "hukumdar", "kral", "imparator"});
+        map.put("sultan", new String[]{"padisah", "hukumdar", "halife"});
+        // İnsan
+        map.put("insan", new String[]{"kisi", "adam", "bireyler", "insanlik"});
+        map.put("halki", new String[]{"toplum", "millet", "ulus", "vatandaslar"});
+        map.put("millet", new String[]{"ulus", "halk", "toplum"});
+        // Yer
+        map.put("sehir", new String[]{"kent", "kasaba", "belde"});
+        map.put("ulke", new String[]{"devlet", "vatan", "memleket", "toprak"});
+        // Zaman
+        map.put("donem", new String[]{"cag", "devir", "era", "sure"});
+        map.put("tarih", new String[]{"gecmis", "mazide", "eskiden"});
+        // Eylem
+        map.put("kurdu", new String[]{"kurulus", "tesis", "olusturdu"});
+        map.put("oldu", new String[]{"vefat", "hayatini kaybetti", "sehit"});
+        return map;
+    }
+
+    // Türkçe ek varyantları üret — kelimenin olası hallerini döndür
+    private java.util.List<String> generateTurkishVariants(String word) {
+        java.util.List<String> variants = new java.util.ArrayList<>();
+        variants.add(word);
+        if (word.length() < 3) return variants;
+        // Yaygın Türkçe ekler
+        String[] suffixes = {"in", "nin", "un", "nun", "a", "e", "ya", "ye",
+                             "da", "de", "ta", "te", "dan", "den", "tan", "ten",
+                             "i", "u", "yi", "yu", "la", "le", "yla", "yle",
+                             "lar", "ler", "lara", "lere", "larin", "lerin",
+                             "li", "lu", "luk", "lik", "ci", "cu", "cul"};
+        for (String suf : suffixes) {
+            variants.add(word + suf);
+        }
+        // Kök varyantları — son 1-2 harf çıkar
+        if (word.length() >= 5) variants.add(word.substring(0, word.length() - 1));
+        if (word.length() >= 6) variants.add(word.substring(0, word.length() - 2));
+        return variants;
+    }
+
+    // Gelişmiş skor — anlam motoru + fuzzy + ek varyantları birleşik
+    private int calcScore(java.util.List<String> words, String fullQuery, String pageText) {
+        if (pageText == null || pageText.isEmpty()) return 0;
+        java.util.Map<String, String[]> semanticMap = buildSemanticMap();
+        int score = 0;
+
+        // 1. Tam cümle eşleşmesi — en kesin sonuç
+        if (pageText.contains(fullQuery)) return 10000;
+
+        // 2. Ardışık kelime çiftleri — cümle yapısını korur
+        for (int i = 0; i < words.size() - 1; i++) {
+            String bigram = words.get(i) + " " + words.get(i + 1);
+            if (pageText.contains(bigram)) score += 600;
+        }
+
+        // 3. Her kelime için çok katmanlı eşleşme
+        int matchedWords = 0;
+        for (String word : words) {
+            if (word.length() < 2) continue;
+            boolean foundThisWord = false;
+
+            // 3a. Tam kelime eşleşmesi
+            if (pageText.contains(word)) {
+                score += 10 + word.length() * 6;
+                matchedWords++;
+                foundThisWord = true;
+            }
+
+            // 3b. Türkçe ek varyantları
+            if (!foundThisWord) {
+                for (String variant : generateTurkishVariants(word)) {
+                    if (!variant.equals(word) && pageText.contains(variant)) {
+                        score += 8 + word.length() * 4;
+                        matchedWords++;
+                        foundThisWord = true;
+                        break;
+                    }
+                }
+            }
+
+            // 3c. Anlam motoru — eş anlamlılar
+            if (!foundThisWord && semanticMap.containsKey(word)) {
+                for (String synonym : semanticMap.get(word)) {
+                    if (pageText.contains(synonym)) {
+                        score += 5;
+                        matchedWords++;
+                        foundThisWord = true;
+                        break;
+                    }
+                }
+            }
+
+            // 3d. Öğrenme — bu PDF için başarılı aramaları hatırla
+            if (!foundThisWord) {
+                try {
+                    android.database.Cursor lc = db.rawQuery(
+                        "SELECT 1 FROM search_history WHERE pdf_uri=? AND query LIKE ? LIMIT 1",
+                        new String[]{pdfUri, "%" + word + "%"});
+                    if (lc.moveToFirst()) { score += 3; matchedWords++; foundThisWord = true; }
+                    lc.close();
+                } catch (Exception ignored) {}
+            }
+        }
+
+        // 4. Eşleşme oranı filtresi
+        if (words.size() > 1) {
+            double ratio = (double) matchedWords / words.size();
+            if (ratio < 0.5) return 0; // çok kelimeli aramada en az %50 eşleşmeli
+        } else {
+            if (matchedWords == 0) return 0; // tek kelimede mutlaka bir eşleşme olmalı
+        }
+
+        return score;
+    }
+
+    // Başarılı aramayı öğren
+    private void learnSearch(String query, int foundPage) {
+        try {
+            db.execSQL("CREATE TABLE IF NOT EXISTS search_history (" +
+                "pdf_uri TEXT, query TEXT, found_page INTEGER, ts DATETIME DEFAULT CURRENT_TIMESTAMP)");
+            android.content.ContentValues cv = new android.content.ContentValues();
+            cv.put("pdf_uri", pdfUri);
+            cv.put("query", query);
+            cv.put("found_page", foundPage);
+            db.insert("search_history", null, cv);
+        } catch (Exception ignored) {}
+    }
+
+
+
+    // OCR Cache DB işlemleri
+    private void ensureOcrCacheTable() {
+        db.execSQL("CREATE TABLE IF NOT EXISTS pdf_ocr_cache (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+            "pdf_uri TEXT, page INTEGER, ocr_text TEXT, " +
+            "UNIQUE(pdf_uri, page))");
+    }
+
+    private int getCachedPageCount() {
+        android.database.Cursor c = db.rawQuery(
+            "SELECT COUNT(*) FROM pdf_ocr_cache WHERE pdf_uri=?", new String[]{pdfUri});
+        int count = c.moveToFirst() ? c.getInt(0) : 0;
+        c.close();
+        return count;
+    }
+
+    private boolean isPageCached(int page) {
+        try {
+            android.database.Cursor c = db.rawQuery(
+                "SELECT 1 FROM pdf_ocr_cache WHERE pdf_uri=? AND page=?",
+                new String[]{pdfUri, String.valueOf(page)});
+            boolean exists = c.moveToFirst();
+            c.close();
+            return exists;
+        } catch (Exception e) { return false; }
+    }
+
+    private void savePageOcr(int page, String text) {
+        try {
+            android.content.ContentValues cv = new android.content.ContentValues();
+            cv.put("pdf_uri", pdfUri);
+            cv.put("page", page);
+            cv.put("ocr_text", text);
+            db.insertWithOnConflict("pdf_ocr_cache", null, cv, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE);
+        } catch (Exception ignored) {}
+    }
+
+    private String turkishNormalize(String text) {
+        if (text == null) return "";
+        String s = text.toLowerCase();
+        s = s.replace("\u0131", "i").replace("\u0130", "i")
+             .replace("\u011f", "g").replace("\u011e", "g")
+             .replace("\u015f", "s").replace("\u015e", "s")
+             .replace("\u00f6", "o").replace("\u00d6", "o")
+             .replace("\u00fc", "u").replace("\u00dc", "u")
+             .replace("\u00e7", "c").replace("\u00c7", "c");
+        s = s.replaceAll("[.,!?;:()'\"\\[\\]{}]", " ");
+        s = s.replaceAll("\\s+", " ").trim();
+        return s;
+    }
+
+    private String normalizeText(String text) { return turkishNormalize(text); }
+
+    private double strictFuzzyScore(String[] queryWords, String pageText) {
+        java.util.List<String> wl = new java.util.ArrayList<>(java.util.Arrays.asList(queryWords));
+        return calcScore(wl, String.join(" ", queryWords), pageText) > 0 ? 1.0 : 0.0;
+    }
+
+    private double fuzzyScore(String[] q, String t) { return strictFuzzyScore(q, t); }
+
 
     // Yanıp sönen arama işareti overlay — kırmızı çerçeve
     class SearchOverlay extends View {
