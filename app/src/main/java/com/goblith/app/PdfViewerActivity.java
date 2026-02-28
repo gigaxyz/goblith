@@ -20,9 +20,10 @@ import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.AsyncTask;
-import com.tom_roush.pdfbox.android.PDFBoxResourceLoader;
-import com.tom_roush.pdfbox.pdmodel.PDDocument;
-import com.tom_roush.pdfbox.text.PDFTextStripper;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.TextRecognition;
+import com.google.mlkit.vision.text.TextRecognizer;
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import android.os.Handler;
 import android.os.ParcelFileDescriptor;
 import android.text.InputType;
@@ -321,7 +322,6 @@ public class PdfViewerActivity extends AppCompatActivity {
         topBar2.addView(flex(btnPdfSearch,6));
 
         btnPdfSearch.setOnClickListener(v -> showPdfSearchDialog());
-        PDFBoxResourceLoader.init(getApplicationContext());
 
         // ── Çizim toolbar ─────────────────────────────────────────────────────
         drawToolbar=new LinearLayout(this);
@@ -912,38 +912,46 @@ public class PdfViewerActivity extends AppCompatActivity {
                 pfd.close();
 
                 // Tüm PDF metnini çıkar
-                String fullText = extractAllText(pdfBytes);
-
-                if (fullText.trim().isEmpty()) {
-                    result = -2; // metin yok
+                // ML Kit OCR ile her sayfayı tara
+                android.graphics.pdf.PdfRenderer renderer2 = new android.graphics.pdf.PdfRenderer(
+                    getContentResolver().openFileDescriptor(android.net.Uri.parse(pdfUri), "r"));
+                java.util.List<int[]> candidates = new java.util.ArrayList<>();
+                TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+                for (int p = 0; p < totalPages; p++) {
+                    android.graphics.pdf.PdfRenderer.Page page = renderer2.openPage(p);
+                    android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(
+                        page.getWidth() * 2, page.getHeight() * 2, android.graphics.Bitmap.Config.ARGB_8888);
+                    page.render(bmp, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                    page.close();
+                    InputImage image = InputImage.fromBitmap(bmp, 0);
+                    try {
+                        com.google.android.gms.tasks.Tasks.await(
+                            recognizer.process(image).addOnSuccessListener(visionText -> {
+                                String pageText = normalizeText(visionText.getText());
+                                double score = fuzzyScore(qWords, pageText);
+                                if (score >= 0.05) candidates.add(new int[]{p, (int)(score * 1000)});
+                            })
+                        );
+                    } catch (Exception ignored) {}
+                    bmp.recycle();
+                }
+                renderer2.close();
+                recognizer.close();
+                if (candidates.isEmpty()) {
+                    result = -2;
                 } else {
-                    // Her sayfayı yaklaşık eşit parçalara böl
-                    int chunkSize = Math.max(1, fullText.length() / Math.max(totalPages, 1));
-                    java.util.List<int[]> candidates = new java.util.ArrayList<>();
-                    for (int p = 0; p < totalPages; p++) {
-                        int start2 = p * chunkSize;
-                        int end2 = Math.min(start2 + chunkSize + 200, fullText.length());
-                        if (start2 >= fullText.length()) break;
-                        String pageText = normalizeText(fullText.substring(start2, end2));
-                        double score = fuzzyScore(qWords, pageText);
-                        if (score >= 0.05) candidates.add(new int[]{p, (int)(score * 1000)});
-                    }
-                    if (candidates.isEmpty()) {
-                        result = -2;
-                    } else {
-                        int maxScore = 0;
-                        for (int[] cand : candidates) if (cand[1] > maxScore) maxScore = cand[1];
-                        int threshold = (int)(maxScore * 0.6);
-                        int bestPage = candidates.get(0)[0];
-                        int minDist = Integer.MAX_VALUE;
-                        for (int[] cand : candidates) {
-                            if (cand[1] >= threshold) {
-                                int dist = Math.abs(cand[0] - currentPage);
-                                if (dist < minDist) { minDist = dist; bestPage = cand[0]; }
-                            }
+                    int maxScore = 0;
+                    for (int[] cand : candidates) if (cand[1] > maxScore) maxScore = cand[1];
+                    int threshold = (int)(maxScore * 0.6);
+                    int bestPage = candidates.get(0)[0];
+                    int minDist = Integer.MAX_VALUE;
+                    for (int[] cand : candidates) {
+                        if (cand[1] >= threshold) {
+                            int dist = Math.abs(cand[0] - currentPage);
+                            if (dist < minDist) { minDist = dist; bestPage = cand[0]; }
                         }
-                        result = bestPage;
                     }
+                    result = bestPage;
                 }
             } catch (Exception e) {
                 android.util.Log.e("PdfSearch", errorMsg, e);
@@ -966,19 +974,11 @@ public class PdfViewerActivity extends AppCompatActivity {
     }
 
     private String extractAllText(byte[] pdfBytes) {
-        StringBuilder allText = new StringBuilder();
-        try {
-            java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(pdfBytes);
-            PDDocument doc = PDDocument.load(bis);
-            PDFTextStripper stripper = new PDFTextStripper();
-            stripper.setSortByPosition(true);
-            allText.append(stripper.getText(doc));
-            doc.close();
-        } catch (Exception e) {
-            android.util.Log.e("PdfSearch", "extractAllText hata: " + e.getMessage());
-        }
-        return allText.toString();
+        // ML Kit ile OCR — bu metod artık kullanılmıyor
+        // doFuzzyPdfSearch direkt ML Kit kullanıyor
+        return "";
     }
+
 
 
 
