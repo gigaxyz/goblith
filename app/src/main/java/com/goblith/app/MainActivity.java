@@ -53,13 +53,13 @@ public class MainActivity extends AppCompatActivity {
 
         TextView subtitle = new TextView(this);
         subtitle.setText("Kisisel Bilgi Sistemi");
-        subtitle.setTextColor(0xFF6B6A8A);
+        subtitle.setTextColor(0xFF9B8EC4);
         subtitle.setTextSize(13);
         subtitle.setPadding(24, 0, 24, 16);
         root.addView(subtitle);
 
         // Butonlar — referansları saklıyoruz
-        Button btnAdd    = makeBtn("+ DOSYA EKLE",        R.drawable.ic_add,        0xFF6D28D9);
+        Button btnAdd    = makeBtn("+ DOSYA EKLE",        R.drawable.ic_add,        0xFF7C3AED);
         Button btnNotes  = makeBtn("ALINTI BANKASI",       R.drawable.ic_notes,      0xFF1E1B4B);
         Button btnWords  = makeBtn("KELIME ANALIZI",       R.drawable.ic_words,      0xFF4C1D95);
         Button btnStats  = makeBtn("ISTATISTIKLER",        R.drawable.ic_stats,      0xFF1E1B4B);
@@ -93,7 +93,7 @@ public class MainActivity extends AppCompatActivity {
 
         TextView libTitle = new TextView(this);
         libTitle.setText("KUTUPHANEM");
-        libTitle.setTextColor(0xFF6B6A8A);
+        libTitle.setTextColor(0xFF9B8EC4);
         libTitle.setTextSize(12);
         libTitle.setTypeface(null, Typeface.BOLD);
         libTitle.setPadding(24, 4, 24, 10);
@@ -142,24 +142,25 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private Button makeBtn(String text, int iconRes, int color) {
-        Button btn = new Button(this);
-        btn.setText(text);
-        btn.setBackgroundColor(color);
-        btn.setTextColor(0xFFFFFFFF);
-        btn.setTextSize(11);
-        btn.setTypeface(null, Typeface.BOLD);
-        btn.setGravity(Gravity.CENTER);
-        btn.setPadding(8, 14, 8, 14);
-        btn.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        Button b = new Button(this);
+        b.setText(text);
+        b.setBackgroundColor(color);
+        b.setTextColor(0xFFE2D9F3);
+        b.setTextSize(10);
+        b.setTypeface(null, android.graphics.Typeface.BOLD);
+        b.setGravity(android.view.Gravity.CENTER);
+        b.setPadding(8, 20, 8, 20);
+        b.setLetterSpacing(0.08f);
         try {
-            Drawable icon = ContextCompat.getDrawable(this, iconRes);
+            android.graphics.drawable.Drawable icon = androidx.core.content.ContextCompat.getDrawable(this, iconRes);
             if (icon != null) {
-                icon.setBounds(0, 0, 40, 40);
-                btn.setCompoundDrawables(null, icon, null, null);
-                btn.setCompoundDrawablePadding(4);
+                icon.setBounds(0, 0, 52, 52);
+                icon.setTint(0xFFE2D9F3);
+                b.setCompoundDrawables(null, icon, null, null);
+                b.setCompoundDrawablePadding(8);
             }
         } catch (Exception ignored) {}
-        return btn;
+        return b;
     }
 
     private void showAllBookmarks() {
