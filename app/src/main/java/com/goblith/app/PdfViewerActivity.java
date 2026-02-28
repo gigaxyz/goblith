@@ -921,8 +921,8 @@ public class PdfViewerActivity extends AppCompatActivity {
 
                     android.graphics.pdf.PdfRenderer.Page page = renderer.openPage(p);
                     // Yüksek çözünürlük — OCR için önemli
-                    int w = page.getWidth() * 2;
-                    int h = page.getHeight() * 2;
+                    int w = page.getWidth() * 3;
+                    int h = page.getHeight() * 3;
                     android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(
                         w, h, android.graphics.Bitmap.Config.ARGB_8888);
                     android.graphics.Canvas canvas = new android.graphics.Canvas(bmp);
@@ -986,71 +986,6 @@ public class PdfViewerActivity extends AppCompatActivity {
     }
 
     // Daha sıkı fuzzy skor — kısa kelime eşleşmesini cezalandır
-    private double strictFuzzyScore(String[] queryWords, String pageText) {
-        if (pageText == null || pageText.isEmpty()) return 0;
-        int matched = 0;
-        int total = 0;
-        for (String word : queryWords) {
-            if (word.length() < 3) continue;
-            total += 3;
-            if (pageText.contains(word)) {
-                matched += 3; // tam eşleşme en yüksek puan
-            } else if (word.length() >= 5 && pageText.contains(word.substring(0, word.length() - 1))) {
-                matched += 2; // son harf eksik
-            } else if (word.length() >= 5 && pageText.contains(word.substring(0, word.length() - 2))) {
-                matched += 1; // son iki harf eksik
-            }
-        }
-        if (total == 0) return 0;
-        double score = (double) matched / total;
-        // En az %60 eşleşme zorunlu
-        return score >= 0.6 ? score : 0;
-    }
-
-    private String extractAllText(byte[] pdfBytes) { return ""; }
-
-
-
-
-
-
-    private void showSearchOverlay(String query) {
-        if (searchOverlay != null) {
-            ((android.view.ViewGroup) searchOverlay.getParent()).removeView(searchOverlay);
-        }
-        searchOverlay = new SearchOverlay(this, query);
-        android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        // contentArea içindeki frameLayout'a ekle
-        try {
-            android.widget.FrameLayout frame = (android.widget.FrameLayout)
-                ((android.widget.FrameLayout) pageView.getParent());
-            frame.addView(searchOverlay, lp);
-        } catch (Exception e) {
-            Toast.makeText(this, "İşaret eklenemedi", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private String normalizeText(String text) {
-        if (text == null) return "";
-        return text.toLowerCase()
-            .replaceAll("[.,!?;:()\\[\\]{}]", " ")
-            .replaceAll("\\s+", " ")
-            .trim();
-    }
-
-    private double fuzzyScore(String[] queryWords, String pageText) {
-        if (pageText == null || pageText.isEmpty()) return 0;
-        int matched = 0;
-        for (String word : queryWords) {
-            if (word.length() < 2) continue;
-            // Tam eşleşme
-            if (pageText.contains(word)) { matched += 2; continue; }
-            // Kısmi eşleşme (en az 3 harf olan kelimelerin ilk 3 harfi)
-            if (word.length() >= 3 && pageText.contains(word.substring(0, 3))) matched++;
-        }
-        return queryWords.length > 0 ? (double) matched / (queryWords.length * 2) : 0;
-    }
 
     // Yanıp sönen arama işareti overlay — kırmızı çerçeve
     class SearchOverlay extends View {
@@ -1150,6 +1085,41 @@ public class PdfViewerActivity extends AppCompatActivity {
         b.setLayoutParams(new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));return b;
     }
     private Button flex(Button b,int lm){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1);lp.setMargins(lm,0,0,0);b.setLayoutParams(lp);return b;}
+
+
+    private String turkishNormalize(String text) {
+        if (text == null) return "";
+        String s = text.toLowerCase();
+        s = s.replace("\u0131", "i").replace("\u011f", "g");
+        s = s.replace("\u015f", "s").replace("\u00f6", "o");
+        s = s.replace("\u00fc", "u").replace("\u00e7", "c");
+        s = s.replaceAll("[.,!?;:()047\[\]{}\-]", " ");
+        s = s.replaceAll("\\s+", " ").trim();
+        return s;
+    }
+
+    private String normalizeText(String text) { return turkishNormalize(text); }
+
+    private double strictFuzzyScore(String[] queryWords, String pageText) {
+        if (pageText == null || pageText.isEmpty()) return 0;
+        String normPage = turkishNormalize(pageText);
+        int matched = 0, total = 0;
+        for (String word : queryWords) {
+            String nw = turkishNormalize(word);
+            if (nw.length() < 3) continue;
+            total += 4;
+            if (normPage.contains(nw)) { matched += 4; continue; }
+            if (nw.length() >= 5 && normPage.contains(nw.substring(0, nw.length()-1))) { matched += 2; continue; }
+            if (nw.length() >= 6 && normPage.contains(nw.substring(0, nw.length()-2))) { matched += 1; continue; }
+            int stem = (int)(nw.length() * 0.7);
+            if (stem >= 3 && normPage.contains(nw.substring(0, stem))) matched += 1;
+        }
+        if (total == 0) return 0;
+        double score = (double) matched / total;
+        return score >= 0.65 ? score : 0;
+    }
+
+    private double fuzzyScore(String[] q, String t) { return strictFuzzyScore(q, t); }
 
     // ── Intent import ─────────────────────────────────────────────────────────
 class DBHelper extends SQLiteOpenHelper{
