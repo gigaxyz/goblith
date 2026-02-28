@@ -20,6 +20,9 @@ import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.AsyncTask;
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader;
+import com.tom_roush.pdfbox.pdmodel.PDDocument;
+import com.tom_roush.pdfbox.text.PDFTextStripper;
 import android.os.Handler;
 import android.os.ParcelFileDescriptor;
 import android.text.InputType;
@@ -318,6 +321,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         topBar2.addView(flex(btnPdfSearch,6));
 
         btnPdfSearch.setOnClickListener(v -> showPdfSearchDialog());
+        PDFBoxResourceLoader.init(getApplicationContext());
 
         // ── Çizim toolbar ─────────────────────────────────────────────────────
         drawToolbar=new LinearLayout(this);
@@ -964,58 +968,18 @@ public class PdfViewerActivity extends AppCompatActivity {
     private String extractAllText(byte[] pdfBytes) {
         StringBuilder allText = new StringBuilder();
         try {
-            String raw = new String(pdfBytes, "ISO-8859-1");
-            int pos = 0;
-            while (pos < raw.length()) {
-                int s1 = raw.indexOf("stream\n", pos);
-                int s2 = raw.indexOf("stream\r\n", pos);
-                int streamStart = (s1 < 0) ? s2 : (s2 < 0) ? s1 : Math.min(s1, s2);
-                if (streamStart < 0) break;
-                int dataStart = raw.indexOf("\n", streamStart) + 1;
-                int streamEnd = raw.indexOf("endstream", dataStart);
-                if (streamEnd < 0 || dataStart >= streamEnd) { pos = streamStart + 7; continue; }
-                int objStart = raw.lastIndexOf("obj", streamStart);
-                String objHeader = objStart >= 0 ? raw.substring(Math.max(0, objStart), streamStart) : "";
-                boolean isFlate = objHeader.contains("FlateDecode") || objHeader.contains("/Fl ");
-                String streamText = "";
-                if (isFlate) {
-                    try {
-                        byte[] compressed = raw.substring(dataStart, streamEnd).getBytes("ISO-8859-1");
-                        java.util.zip.Inflater inf = new java.util.zip.Inflater();
-                        inf.setInput(compressed);
-                        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-                        byte[] outBuf = new byte[4096];
-                        int len;
-                        while (!inf.finished() && !inf.needsInput()) {
-                            len = inf.inflate(outBuf);
-                            if (len > 0) out.write(outBuf, 0, len);
-                        }
-                        inf.end();
-                        byte[] decoded = out.toByteArray();
-                        try { streamText = new String(decoded, "UTF-8"); }
-                        catch (Exception e) { streamText = new String(decoded, "ISO-8859-1"); }
-                    } catch (Exception ignored) {}
-                } else {
-                    streamText = raw.substring(dataStart, streamEnd);
-                }
-                // Tj/TJ metin operatörleri
-                java.util.regex.Matcher m1 = java.util.regex.Pattern.compile("\\(([^)]*)\\)\\s*Tj").matcher(streamText);
-                while (m1.find()) allText.append(m1.group(1)).append(" ");
-                java.util.regex.Matcher m2 = java.util.regex.Pattern.compile("\\[([^\\]]*)\\]\\s*TJ").matcher(streamText);
-                while (m2.find()) {
-                    java.util.regex.Matcher m3 = java.util.regex.Pattern.compile("\\(([^)]*)\\)").matcher(m2.group(1));
-                    while (m3.find()) allText.append(m3.group(1)).append(" ");
-                }
-                pos = streamEnd + 9;
-            }
-            // Hiç metin çıkmadıysa ham metin dene
-            if (allText.toString().trim().isEmpty()) {
-                java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\([\\x20-\\x7E]{3,}\\)").matcher(new String(pdfBytes, "ISO-8859-1"));
-                while (m.find()) allText.append(m.group(1)).append(" ");
-            }
-        } catch (Exception ignored) {}
+            java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(pdfBytes);
+            PDDocument doc = PDDocument.load(bis);
+            PDFTextStripper stripper = new PDFTextStripper();
+            stripper.setSortByPosition(true);
+            allText.append(stripper.getText(doc));
+            doc.close();
+        } catch (Exception e) {
+            android.util.Log.e("PdfSearch", "extractAllText hata: " + e.getMessage());
+        }
         return allText.toString();
     }
+
 
 
     private void showSearchOverlay(String query) {
