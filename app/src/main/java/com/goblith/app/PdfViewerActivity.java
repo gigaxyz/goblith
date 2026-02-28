@@ -925,11 +925,12 @@ public class PdfViewerActivity extends AppCompatActivity {
                     page.close();
                     InputImage image = InputImage.fromBitmap(bmp, 0);
                     try {
+                        final int finalP = p;
                         com.google.android.gms.tasks.Tasks.await(
                             recognizer.process(image).addOnSuccessListener(visionText -> {
                                 String pageText = normalizeText(visionText.getText());
                                 double score = fuzzyScore(qWords, pageText);
-                                if (score >= 0.05) candidates.add(new int[]{p, (int)(score * 1000)});
+                                if (score >= 0.05) candidates.add(new int[]{finalP, (int)(score * 1000)});
                             })
                         );
                     } catch (Exception ignored) {}
