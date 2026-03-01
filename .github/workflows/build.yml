@@ -25,6 +25,7 @@ jobs:
         run: |
           mkdir -p ~/.android
           echo "${{ secrets.DEBUG_KEYSTORE }}" | base64 -d > ~/.android/debug.keystore
+          keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android 2>/dev/null | grep SHA1
 
       - name: Build debug APK
         run: ./gradlew assembleDebug
