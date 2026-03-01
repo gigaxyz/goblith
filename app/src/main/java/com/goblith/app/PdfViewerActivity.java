@@ -882,11 +882,15 @@ public class PdfViewerActivity extends AppCompatActivity {
     }
 
     private void showSearchOverlay(String query) {
+        showSearchOverlay(query, null);
+    }
+
+    private void showSearchOverlay(String query, float[] coords) {
         if (searchOverlay != null) {
             try { ((android.view.ViewGroup) searchOverlay.getParent()).removeView(searchOverlay); }
             catch (Exception ignored) {}
         }
-        searchOverlay = new SearchOverlay(this, query);
+        searchOverlay = new SearchOverlay(this, query, coords);
         android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         try {
@@ -961,15 +965,29 @@ public class PdfViewerActivity extends AppCompatActivity {
                 // Tüm sayfalar için skor hesapla
                 java.util.List<int[]> results = new java.util.ArrayList<>(); // [sayfa, skor]
                 android.database.Cursor cur = db.rawQuery(
-                    "SELECT page, ocr_text FROM pdf_ocr_cache WHERE pdf_uri=? ORDER BY page ASC",
+                    "SELECT page, ocr_text, blocks FROM pdf_ocr_cache WHERE pdf_uri=? ORDER BY page ASC",
                     new String[]{pdfUri});
+                // Koordinat için en iyi sayfanın blok verisini sakla
+                float[] bestBlockCoords = null;
+                int bestBlockPage = -1;
+
                 while (cur.moveToNext()) {
                     int pageNum = cur.getInt(0);
                     String ocrText = turkishNormalize(cur.getString(1));
+                    String blocksJson = cur.getString(2);
                     int score = calcScore(validWords, normQuery, ocrText);
-                    if (score > 0) results.add(new int[]{pageNum, score});
+                    if (score > 0) {
+                        results.add(new int[]{pageNum, score});
+                        // Bu sayfa için blok koordinatını da hesapla
+                        float[] coords = findBestBlock(blocksJson, filteredWords);
+                        if (coords != null && (bestBlockCoords == null || coords[4] > bestBlockCoords[4])) {
+                            bestBlockCoords = coords;
+                            bestBlockPage = pageNum;
+                        }
+                    }
                 }
                 cur.close();
+                final float[] finalCoords = bestBlockCoords;
 
                 if (results.isEmpty()) {
                     runOnUiThread(() -> { pd.dismiss(); Toast.makeText(this, "Esleme bulunamadi", Toast.LENGTH_LONG).show(); });
@@ -1000,7 +1018,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                     Toast.makeText(this, "Sayfa " + (finalPage + 1) + " bulundu", Toast.LENGTH_SHORT).show();
                     learnSearch(fQuery, finalPage);
                     showPage(finalPage);
-                    new Handler().postDelayed(() -> showSearchOverlay(fQuery), 500);
+                    new Handler().postDelayed(() -> showSearchOverlay(fQuery, finalCoords), 500);
                 });
 
             } catch (Exception e) {
@@ -1059,6 +1077,136 @@ public class PdfViewerActivity extends AppCompatActivity {
         if (word.length() >= 6) variants.add(word.substring(0, word.length()-2));
         return variants;
     }
+
+    // ── Koordinat Tabanlı Arama + Levenshtein ─────────────────────────────────
+
+    // Levenshtein mesafesi — OCR hatalarını tolere eder (t→i, rn→m gibi)
+    private int levenshtein(String a, String b) {
+        int la = a.length(), lb = b.length();
+        if (la == 0) return lb;
+        if (lb == 0) return la;
+        int[][] dp = new int[la + 1][lb + 1];
+        for (int i = 0; i <= la; i++) dp[i][0] = i;
+        for (int j = 0; j <= lb; j++) dp[0][j] = j;
+        for (int i = 1; i <= la; i++) {
+            for (int j = 1; j <= lb; j++) {
+                int cost = (a.charAt(i-1) == b.charAt(j-1)) ? 0 : 1;
+                dp[i][j] = Math.min(Math.min(dp[i-1][j]+1, dp[i][j-1]+1), dp[i-1][j-1]+cost);
+            }
+        }
+        return dp[la][lb];
+    }
+
+    // İki kelimenin benzerlik oranı — 0.0 ile 1.0 arası
+    private double wordSimilarity(String a, String b) {
+        if (a.equals(b)) return 1.0;
+        int maxLen = Math.max(a.length(), b.length());
+        if (maxLen == 0) return 1.0;
+        return 1.0 - (double) levenshtein(a, b) / maxLen;
+    }
+
+    // Text block'un sorguya ne kadar uyduğunu hesapla — Levenshtein dahil
+    private double blockScore(String[] qWords, String blockText) {
+        if (blockText == null || blockText.isEmpty()) return 0;
+        String normBlock = turkishNormalize(blockText);
+        String[] blockWords = normBlock.split("\\s+");
+
+        // Tam blok eşleşmesi
+        if (normBlock.contains(String.join(" ", qWords))) return 1.0;
+
+        // Her sorgu kelimesi için en yakın blok kelimesini bul
+        double totalScore = 0;
+        int validWords = 0;
+        for (String qw : qWords) {
+            if (qw.length() < 2) continue;
+            validWords++;
+            double bestWordScore = 0;
+            for (String bw : blockWords) {
+                if (bw.length() < 2) continue;
+                String qwStem = turkishStem(qw);
+                String bwStem = turkishStem(bw);
+                // Kök eşleşmesi
+                double sim = wordSimilarity(qwStem, bwStem);
+                // Ek tolerans — OCR sıklıkla ü→u, ş→s gibi hata yapar
+                if (sim < 0.7) sim = Math.max(sim, wordSimilarity(qw, bw));
+                bestWordScore = Math.max(bestWordScore, sim);
+            }
+            totalScore += bestWordScore;
+        }
+        if (validWords == 0) return 0;
+        double avg = totalScore / validWords;
+        return avg >= 0.65 ? avg : 0;
+    }
+
+    // Sayfanın text block'larını JSON olarak sakla
+    private String blocksToJson(com.google.mlkit.vision.text.Text visionText, int bmpW, int bmpH) {
+        StringBuilder sb = new StringBuilder("[");
+        boolean first = true;
+        for (com.google.mlkit.vision.text.Text.TextBlock block : visionText.getTextBlocks()) {
+            android.graphics.Rect r = block.getBoundingBox();
+            if (r == null) continue;
+            if (!first) sb.append(",");
+            // Koordinatları 0-1 arası normalize et
+            float x1 = (float) r.left / bmpW;
+            float y1 = (float) r.top / bmpH;
+            float x2 = (float) r.right / bmpW;
+            float y2 = (float) r.bottom / bmpH;
+            String text = block.getText().replace("\"", "'").replace("\n", " ");
+            sb.append("{\"t\":\"").append(text)
+              .append("\",\"x1\":").append(x1)
+              .append(",\"y1\":").append(y1)
+              .append(",\"x2\":").append(x2)
+              .append(",\"y2\":").append(y2)
+              .append("}");
+            first = false;
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    // JSON'dan koordinatlı en iyi bloğu bul — [x1,y1,x2,y2,score]
+    private float[] findBestBlock(String blocksJson, String[] qWords) {
+        if (blocksJson == null || blocksJson.isEmpty()) return null;
+        float bestScore = 0;
+        float[] bestCoords = null;
+        // Basit JSON parse — her bloğu işle
+        String[] entries = blocksJson.split("\\},\\{");
+        for (String entry : entries) {
+            try {
+                String t = extractJsonStr(entry, "t");
+                float x1 = extractJsonFloat(entry, "x1");
+                float y1 = extractJsonFloat(entry, "y1");
+                float x2 = extractJsonFloat(entry, "x2");
+                float y2 = extractJsonFloat(entry, "y2");
+                double score = blockScore(qWords, t);
+                if (score > bestScore) {
+                    bestScore = (float) score;
+                    bestCoords = new float[]{x1, y1, x2, y2, bestScore};
+                }
+            } catch (Exception ignored) {}
+        }
+        return bestCoords;
+    }
+
+    private String extractJsonStr(String json, String key) {
+        String k = "\"" + key + "\":\"";
+        int s = json.indexOf(k);
+        if (s < 0) return "";
+        s += k.length();
+        int e = json.indexOf("\"", s);
+        return e > s ? json.substring(s, e) : "";
+    }
+
+    private float extractJsonFloat(String json, String key) {
+        String k = "\"" + key + "\":";
+        int s = json.indexOf(k);
+        if (s < 0) return 0;
+        s += k.length();
+        int e = s;
+        while (e < json.length() && (Character.isDigit(json.charAt(e)) || json.charAt(e) == '.' || json.charAt(e) == '-')) e++;
+        try { return Float.parseFloat(json.substring(s, e)); } catch (Exception ex) { return 0; }
+    }
+
 
     private String turkishStem(String word) {
         if (word.length() <= 4) return word;
@@ -1237,9 +1385,8 @@ public class PdfViewerActivity extends AppCompatActivity {
     // OCR Cache DB işlemleri
     private void ensureOcrCacheTable() {
         db.execSQL("CREATE TABLE IF NOT EXISTS pdf_ocr_cache (" +
-            "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-            "pdf_uri TEXT, page INTEGER, ocr_text TEXT, " +
-            "UNIQUE(pdf_uri, page))");
+            "pdf_uri TEXT, page INTEGER, ocr_text TEXT, blocks TEXT, " +
+            "PRIMARY KEY(pdf_uri, page))");
     }
 
     private int getCachedPageCount() {
@@ -1311,9 +1458,11 @@ public class PdfViewerActivity extends AppCompatActivity {
             }
         };
 
-        SearchOverlay(android.content.Context ctx, String q) {
+        private float[] coords;
+        SearchOverlay(android.content.Context ctx, String q, float[] coords) {
             super(ctx);
             this.query = q;
+            this.coords = coords;
             setBackgroundColor(android.graphics.Color.TRANSPARENT);
 
             paintFill.setColor(0x33FF0000); // yarı saydam kırmızı
@@ -1342,11 +1491,23 @@ public class PdfViewerActivity extends AppCompatActivity {
             if (!visible) return;
             int w = getWidth(), h = getHeight();
 
-            // Küçük, hassas işaret — sayfanın %25-%35 arasında (üst bölge)
-            float left   = w * 0.02f;
-            float right  = w * 0.98f;
-            float top    = h * 0.10f;
-            float bottom = top + h * 0.08f; // sadece ~2 satır yüksekliği
+            // Koordinat varsa tam konuma git, yoksa ortada göster
+            float left, right, top, bottom;
+            if (coords != null && coords[4] > 0.5f) {
+                // ML Kit koordinatları — normalize edilmiş (0-1)
+                float padding = 0.01f;
+                left   = (coords[0] - padding) * w;
+                top    = (coords[1] - padding) * h;
+                right  = (coords[2] + padding) * w;
+                bottom = (coords[3] + padding) * h;
+                // Minimum yükseklik — çok ince olmasın
+                if (bottom - top < 40) bottom = top + 40;
+            } else {
+                left   = w * 0.02f;
+                right  = w * 0.98f;
+                top    = h * 0.35f;
+                bottom = top + h * 0.08f;
+            }
 
             // Yarı saydam kırmızı dolgu
             canvas.drawRect(left, top, right, bottom, paintFill);

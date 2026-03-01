@@ -360,7 +360,7 @@ public class MainActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 db.execSQL("CREATE TABLE IF NOT EXISTS pdf_ocr_cache (" +
-                    "pdf_uri TEXT, page INTEGER, ocr_text TEXT, PRIMARY KEY(pdf_uri, page))");
+                    "pdf_uri TEXT, page INTEGER, ocr_text TEXT, blocks TEXT, PRIMARY KEY(pdf_uri, page))");
                 android.os.ParcelFileDescriptor pfd = getContentResolver()
                     .openFileDescriptor(android.net.Uri.parse(uriStr), "r");
                 if (pfd == null) { runOnUiThread(() -> ocrDialog.dismiss()); return; }
@@ -393,6 +393,7 @@ public class MainActivity extends AppCompatActivity {
                                 recognizer.process(com.google.mlkit.vision.common.InputImage.fromBitmap(bmp, 0)));
                         android.content.ContentValues cv = new android.content.ContentValues();
                         cv.put("pdf_uri", uriStr); cv.put("page", p); cv.put("ocr_text", vt.getText());
+                        cv.put("blocks", buildBlocksJson(vt, bmp.getWidth(), bmp.getHeight()));
                         db.insertWithOnConflict("pdf_ocr_cache", null, cv,
                             android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE);
                     } catch (Exception ignored) {}
@@ -407,6 +408,30 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> ocrDialog.dismiss());
             }
         }).start();
+    }
+
+
+    private String buildBlocksJson(com.google.mlkit.vision.text.Text vt, int bmpW, int bmpH) {
+        StringBuilder sb = new StringBuilder("[");
+        boolean first = true;
+        for (com.google.mlkit.vision.text.Text.TextBlock block : vt.getTextBlocks()) {
+            android.graphics.Rect r = block.getBoundingBox();
+            if (r == null) continue;
+            if (!first) sb.append(",");
+            float x1 = (float) r.left / bmpW;
+            float y1 = (float) r.top / bmpH;
+            float x2 = (float) r.right / bmpW;
+            float y2 = (float) r.bottom / bmpH;
+            String t = block.getText().replace("\"", "'").replace("\n", " ");
+            sb.append("{\"t\":\"").append(t)
+              .append("\",\"x1\":").append(x1)
+              .append(",\"y1\":").append(y1)
+              .append(",\"x2\":").append(x2)
+              .append(",\"y2\":").append(y2).append("}");
+            first = false;
+        }
+        sb.append("]");
+        return sb.toString();
     }
 
     protected void onActivityResult(int req, int res, Intent data) {
