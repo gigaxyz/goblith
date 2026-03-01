@@ -63,6 +63,7 @@ public class PdfViewerActivity extends AppCompatActivity {
     private PdfRenderer pdfRenderer;
     private ParcelFileDescriptor fileDescriptor;
     private int currentPage=0, totalPages=1;
+    private String bookName = "";
     private ImageView pageView;
     private DrawingOverlay drawingOverlay;
     private SearchOverlay searchOverlay;
