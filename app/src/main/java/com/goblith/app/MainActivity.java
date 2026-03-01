@@ -3,6 +3,8 @@ package com.goblith.app;
 import android.app.Activity;
 import android.content.ContentValues;
 import android.content.Intent;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
@@ -41,6 +43,15 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xFF0F0E17);
+
+        // Kullanıcı bilgisi
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        if (user != null) {
+            SyncManager sync = new SyncManager(this, db);
+            sync.pullLibrary(() -> runOnUiThread(this::loadLibrary));
+            new android.os.Handler().postDelayed(() -> sync.syncAll(), 3000);
+        }
+
 
         // Başlık
         TextView title = new TextView(this);

@@ -866,6 +866,147 @@ public class PdfViewerActivity extends AppCompatActivity {
     // ── PDF OCR Cache + Akıllı Arama ─────────────────────────────────────────
 
 
+
+    private void showAIDialog() {
+        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
+        b.setTitle("Yapay Zeka Asistanı");
+        String[] options = {"Bu Sayfayı Özetle", "Bu Sayfa Hakkında Soru Sor", "Arşivimi Analiz Et"};
+        b.setItems(options, (d, which) -> {
+            switch (which) {
+                case 0: summarizeCurrentPage(); break;
+                case 1: askQuestionAboutPage(); break;
+                case 2: analyzeMyArchive(); break;
+            }
+        });
+        b.setNegativeButton("İptal", null);
+        b.show();
+    }
+
+    private void summarizeCurrentPage() {
+        android.app.ProgressDialog pd = new android.app.ProgressDialog(this);
+        pd.setMessage("Sayfa özetleniyor...");
+        pd.setCancelable(false);
+        pd.show();
+
+        // Önce OCR cache'den metni al
+        android.database.Cursor cur = db.rawQuery(
+            "SELECT ocr_text FROM pdf_ocr_cache WHERE pdf_uri=? AND page=?",
+            new String[]{pdfUri, String.valueOf(currentPage)});
+        String pageText = cur.moveToFirst() ? cur.getString(0) : "";
+        cur.close();
+
+        if (pageText.isEmpty()) {
+            pd.dismiss();
+            Toast.makeText(this, "Bu sayfa henüz indekslenmemiş", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        GeminiService.summarizePage(pageText, bookName, currentPage, new GeminiService.OnResultListener() {
+            @Override public void onResult(String result) {
+                pd.dismiss();
+                showAIResult("Sayfa " + (currentPage + 1) + " Özeti", result);
+            }
+            @Override public void onError(String error) {
+                pd.dismiss();
+                Toast.makeText(PdfViewerActivity.this, error, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void askQuestionAboutPage() {
+        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
+        b.setTitle("Soru Sor");
+        android.widget.EditText input = new android.widget.EditText(this);
+        input.setHint("Bu sayfa hakkında sorunuzu yazın...");
+        input.setPadding(32, 24, 32, 24);
+        b.setView(input);
+        b.setPositiveButton("Sor", (d, w) -> {
+            String question = input.getText().toString().trim();
+            if (question.isEmpty()) return;
+            android.app.ProgressDialog pd = new android.app.ProgressDialog(this);
+            pd.setMessage("Yanıt hazırlanıyor...");
+            pd.setCancelable(false);
+            pd.show();
+
+            android.database.Cursor cur = db.rawQuery(
+                "SELECT ocr_text FROM pdf_ocr_cache WHERE pdf_uri=? AND page=?",
+                new String[]{pdfUri, String.valueOf(currentPage)});
+            String pageText = cur.moveToFirst() ? cur.getString(0) : "";
+            cur.close();
+
+            GeminiService.askQuestion(pageText, question, bookName, new GeminiService.OnResultListener() {
+                @Override public void onResult(String result) {
+                    pd.dismiss();
+                    showAIResult("Yanıt", result);
+                }
+                @Override public void onError(String error) {
+                    pd.dismiss();
+                    Toast.makeText(PdfViewerActivity.this, error, Toast.LENGTH_LONG).show();
+                }
+            });
+        });
+        b.setNegativeButton("İptal", null);
+        b.show();
+    }
+
+    private void analyzeMyArchive() {
+        android.app.ProgressDialog pd = new android.app.ProgressDialog(this);
+        pd.setMessage("Arşiv analiz ediliyor...");
+        pd.setCancelable(false);
+        pd.show();
+
+        android.database.Cursor cur = db.rawQuery(
+            "SELECT quote, topic FROM archive WHERE pdf_uri=? LIMIT 20", new String[]{pdfUri});
+        StringBuilder sb = new StringBuilder();
+        while (cur.moveToNext()) {
+            sb.append("- [").append(cur.getString(1)).append("] ").append(cur.getString(0)).append("\n");
+        }
+        cur.close();
+
+        if (sb.length() == 0) {
+            pd.dismiss();
+            Toast.makeText(this, "Bu kitap için henüz arşiv kaydı yok", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        GeminiService.analyzeArchive(sb.toString(), new GeminiService.OnResultListener() {
+            @Override public void onResult(String result) {
+                pd.dismiss();
+                showAIResult("Arşiv Analizi", result);
+            }
+            @Override public void onError(String error) {
+                pd.dismiss();
+                Toast.makeText(PdfViewerActivity.this, error, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void showAIResult(String title, String result) {
+        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
+        b.setTitle(title);
+        android.widget.ScrollView sv = new android.widget.ScrollView(this);
+        android.widget.TextView tv = new android.widget.TextView(this);
+        tv.setText(result);
+        tv.setTextSize(14);
+        tv.setPadding(48, 32, 48, 32);
+        tv.setTextColor(0xFF1A1A1A);
+        sv.addView(tv);
+        b.setView(sv);
+        b.setPositiveButton("Kapat", null);
+        b.setNeutralButton("Arşive Kaydet", (d, w) -> {
+            android.content.ContentValues cv = new android.content.ContentValues();
+            cv.put("pdf_uri", pdfUri);
+            cv.put("page", currentPage);
+            cv.put("quote", result);
+            cv.put("topic", "AI Özet");
+            cv.put("importance", 3);
+            cv.put("source_info", bookName + " - Sayfa " + (currentPage + 1));
+            db.insert("archive", null, cv);
+            Toast.makeText(this, "Arşive kaydedildi", Toast.LENGTH_SHORT).show();
+        });
+        b.show();
+    }
+
     private void showPdfSearchDialog() {
         android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
         b.setTitle("PDF Metin Ara");
