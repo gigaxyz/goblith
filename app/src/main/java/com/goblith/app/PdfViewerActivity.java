@@ -979,7 +979,7 @@ public class PdfViewerActivity extends AppCompatActivity {
                     if (score > 0) {
                         results.add(new int[]{pageNum, score});
                         // Bu sayfa için blok koordinatını da hesapla
-                        float[] coords = findBestBlock(blocksJson, filteredWords);
+                        float[] coords = findBestBlock(blocksJson, validWords.toArray(new String[0]));
                         if (coords != null && (bestBlockCoords == null || coords[4] > bestBlockCoords[4])) {
                             bestBlockCoords = coords;
                             bestBlockPage = pageNum;
