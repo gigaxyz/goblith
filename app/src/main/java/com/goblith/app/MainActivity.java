@@ -59,37 +59,28 @@ public class MainActivity extends AppCompatActivity {
         root.addView(subtitle);
 
         // Butonlar — referansları saklıyoruz
-        Button btnAdd    = makeBtn("+ DOSYA EKLE",        R.drawable.ic_add,        0xFF7C3AED);
-        Button btnNotes  = makeBtn("ALINTI BANKASI",       R.drawable.ic_notes,      0xFF1E1B4B);
-        Button btnWords  = makeBtn("KELIME ANALIZI",       R.drawable.ic_words,      0xFF4C1D95);
-        Button btnStats  = makeBtn("ISTATISTIKLER",        R.drawable.ic_stats,      0xFF1E1B4B);
-        Button btnCross  = makeBtn("CAPRAZ BAGLANTI",      R.drawable.ic_cross,      0xFF1E1B4B);
-        Button btnFlash  = makeBtn("FLASHCARD",            R.drawable.ic_notes,      0xFF4C1D95);
-        Button btnList   = makeBtn("OKUMA LISTESI",        R.drawable.ic_stats,      0xFF1E1B4B);
-        Button btnBmarks = makeBtn("YER IMLERI",           R.drawable.ic_add,        0xFF1E1B4B);
-        Button btnArchiveMain = makeBtn("ARSIV",               R.drawable.ic_notes,      0xFF1E1B4B);
-        Button btnSearch     = makeBtn("PDF ARAMA",            R.drawable.ic_words,      0xFF4C1D95);
+        Button btnAdd    = makeBtn("+ DOSYA EKLE",  R.drawable.ic_add,      0xFF7C3AED);
+        Button btnNotes  = makeBtn("ALINTI BANKASI", R.drawable.ic_notes,    0xFF2D2B55);
+        Button btnWords  = makeBtn("KELIME ANALIZI", R.drawable.ic_words,    0xFF2D2B55);
+        Button btnStats  = makeBtn("ISTATISTIKLER",  R.drawable.ic_stats,    0xFF2D2B55);
+        Button btnCross  = makeBtn("CAPRAZ BAGLANTI",R.drawable.ic_cross,    0xFF2D2B55);
+        Button btnFlash  = makeBtn("FLASHCARD",      R.drawable.ic_flash,    0xFF2D2B55);
+        Button btnList   = makeBtn("OKUMA LISTESI",  R.drawable.ic_list,     0xFF2D2B55);
+        Button btnBmarks = makeBtn("YER IMLERI",     R.drawable.ic_bookmark, 0xFF2D2B55);
+        Button btnArchiveMain = makeBtn("ARSIV",          R.drawable.ic_archive,  0xFF7C3AED);
+        Button btnSearch     = makeBtn("PDF ARAMA",      R.drawable.ic_search,   0xFF2D2B55);
 
-        root.addView(makeRow(btnAdd,         btnNotes));
-        root.addView(makeRow(btnWords,       btnStats));
-        root.addView(makeRow(btnCross,       btnFlash));
-        root.addView(makeRow(btnList,        btnBmarks));
-        LinearLayout arsivRow = new LinearLayout(this);
-        arsivRow.setOrientation(LinearLayout.HORIZONTAL);
-        arsivRow.setPadding(16, 0, 16, 10);
-        LinearLayout.LayoutParams arsivLp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        btnArchiveMain.setLayoutParams(arsivLp);
-        arsivRow.addView(btnArchiveMain);
-        root.addView(arsivRow);
-        LinearLayout searchRow2 = new LinearLayout(this);
-        searchRow2.setOrientation(LinearLayout.HORIZONTAL);
-        searchRow2.setPadding(16, 0, 16, 10);
-        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        btnSearch.setLayoutParams(searchLp);
-        searchRow2.addView(btnSearch);
-        root.addView(searchRow2);
+        // DOSYA EKLE — tam genişlik, vurgulu
+        root.addView(makeFullRow(btnAdd));
+
+        // 2'li satırlar — koyu butonlar
+        root.addView(makeRow(btnNotes,  btnBmarks));
+        root.addView(makeRow(btnWords,  btnStats));
+        root.addView(makeRow(btnCross,  btnFlash));
+        root.addView(makeRow(btnList,   btnSearch));
+
+        // ARŞİV — tam genişlik, vurgulu
+        root.addView(makeFullRow(btnArchiveMain));
 
         TextView libTitle = new TextView(this);
         libTitle.setText("KUTUPHANEM");
@@ -132,12 +123,26 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout makeRow(Button b1, Button b2) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setPadding(16, 0, 16, 10);
-        LinearLayout.LayoutParams lp2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
-        lp2.setMargins(10, 0, 0, 0);
+        row.setPadding(16, 0, 16, 8);
+        LinearLayout.LayoutParams lp1 = new LinearLayout.LayoutParams(0, 150, 1);
+        lp1.setMargins(0, 0, 4, 0);
+        b1.setLayoutParams(lp1);
+        LinearLayout.LayoutParams lp2 = new LinearLayout.LayoutParams(0, 150, 1);
+        lp2.setMargins(4, 0, 0, 0);
         b2.setLayoutParams(lp2);
         row.addView(b1);
         row.addView(b2);
+        return row;
+    }
+
+    private LinearLayout makeFullRow(Button b) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setPadding(16, 0, 16, 8);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 150);
+        b.setLayoutParams(lp);
+        row.addView(b);
         return row;
     }
 

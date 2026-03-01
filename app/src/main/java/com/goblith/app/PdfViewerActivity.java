@@ -1342,42 +1342,39 @@ public class PdfViewerActivity extends AppCompatActivity {
             if (!visible) return;
             int w = getWidth(), h = getHeight();
 
-            // Sayfa ortasında %20 yüksekliğinde dikdörtgen
-            float left   = w * 0.04f;
-            float right  = w * 0.96f;
-            float top    = h * 0.30f;
-            float bottom = h * 0.50f;
+            // Küçük, hassas işaret — sayfanın %25-%35 arasında (üst bölge)
+            float left   = w * 0.02f;
+            float right  = w * 0.98f;
+            float top    = h * 0.10f;
+            float bottom = top + h * 0.08f; // sadece ~2 satır yüksekliği
 
-            // Kırmızı yarı saydam dolgu
+            // Yarı saydam kırmızı dolgu
             canvas.drawRect(left, top, right, bottom, paintFill);
-            // Kırmızı kenarlık
+            // Kırmızı kenarlık — ince
+            paintBorder.setStrokeWidth(3);
             canvas.drawRect(left, top, right, bottom, paintBorder);
 
-            // Köşe işaretleri
-            float cs = 30f;
-            paintBorder.setStrokeWidth(8);
-            // Sol üst
+            // Köşe işaretleri — küçük
+            float cs = 18f;
+            paintBorder.setStrokeWidth(5);
             canvas.drawLine(left, top, left + cs, top, paintBorder);
             canvas.drawLine(left, top, left, top + cs, paintBorder);
-            // Sağ üst
             canvas.drawLine(right, top, right - cs, top, paintBorder);
             canvas.drawLine(right, top, right, top + cs, paintBorder);
-            // Sol alt
             canvas.drawLine(left, bottom, left + cs, bottom, paintBorder);
             canvas.drawLine(left, bottom, left, bottom - cs, paintBorder);
-            // Sağ alt
             canvas.drawLine(right, bottom, right - cs, bottom, paintBorder);
             canvas.drawLine(right, bottom, right, bottom - cs, paintBorder);
 
-            // Metin
-            String label = query.length() > 25 ? query.substring(0, 25) + "..." : query;
-            paintText.setTextSize(h * 0.022f);
-            paintText.setColor(0xFFFF4444);
-            canvas.drawText("\"" + label + "\"", w / 2f, top - 16, paintText);
-
+            // Sorgu etiketi — küçük
+            String label = query.length() > 30 ? query.substring(0, 30) + "..." : query;
             paintText.setTextSize(h * 0.016f);
+            paintText.setColor(0xFFFF4444);
+            canvas.drawText(label, w / 2f, top - 10, paintText);
+
+            paintText.setTextSize(h * 0.013f);
             paintText.setColor(0xFFFFAAAA);
-            canvas.drawText("Kapatmak icin dokun", w / 2f, bottom + 36, paintText);
+            canvas.drawText("Kapatmak icin dokun", w / 2f, bottom + 24, paintText);
         }
     }
 
