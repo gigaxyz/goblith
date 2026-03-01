@@ -1,7 +1,6 @@
 {
   "project_info": {
     "project_number": "737474279071",
-    "firebase_url": "https://goblith-default-rtdb.firebaseio.com",
     "project_id": "goblith",
     "storage_bucket": "goblith.firebasestorage.app"
   },
@@ -13,28 +12,7 @@
           "package_name": "com.goblith.app"
         }
       },
-      "oauth_client": [
-        {
-          "client_id": "737474279071-rm8pa90f4i3ptjulf7ekenv7mku9634a.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.goblith.app",
-            "certificate_hash": "bb9f838b34139fcc2cb83bfe47533989f7e2c5f6"
-          }
-        },
-        {
-          "client_id": "737474279071-upvkkm10o6srks7v1k75tcllvdm0k83q.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.goblith.app",
-            "certificate_hash": "f3aa2a7153203d15a5724b394fa818d7c1aad6d8"
-          }
-        },
-        {
-          "client_id": "737474279071-tel5mf3l6os1s1afomb3f3r5ie7eed0d.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
+      "oauth_client": [],
       "api_key": [
         {
           "current_key": "AIzaSyD2j8P0wjAyiBuqROxOo--pwlJkNlvgNUU"
@@ -42,12 +20,7 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "737474279071-tel5mf3l6os1s1afomb3f3r5ie7eed0d.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
+          "other_platform_oauth_client": []
         }
       }
     }
