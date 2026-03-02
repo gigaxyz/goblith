@@ -24,11 +24,16 @@ public class LoginActivity extends Activity {
             startMain(); return;
         }
 
-        GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(getString(R.string.default_web_client_id))
-            .requestEmail()
-            .build();
-        mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
+        // Google giriş yapılandırması
+        try {
+            GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken("737474279071-tel5mf3l6os1s1afomb3f3r5ie7eed0d.apps.googleusercontent.com")
+                .requestEmail()
+                .build();
+            mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
+        } catch (Exception e) {
+            mGoogleSignInClient = null;
+        }
 
         // UI
         LinearLayout root = new LinearLayout(this);
@@ -64,7 +69,10 @@ public class LoginActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.setMargins(0, 0, 0, 16);
         btnGoogle.setLayoutParams(lp);
-        btnGoogle.setOnClickListener(v -> signInAnonymously());
+        btnGoogle.setOnClickListener(v -> {
+            if (mGoogleSignInClient != null) signInWithGoogle();
+            else signInAnonymously();
+        });
         root.addView(btnGoogle);
 
         Button btnGuest = new Button(this);
