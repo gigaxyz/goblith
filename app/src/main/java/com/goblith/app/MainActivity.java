@@ -60,6 +60,7 @@ public class MainActivity extends AppCompatActivity {
         title.setTextSize(36);
         title.setTypeface(null, Typeface.BOLD);
         title.setPadding(24, 48, 24, 4);
+        title.setOnClickListener(v -> startActivity(new Intent(this, ProfileActivity.class)));
         root.addView(title);
 
         TextView subtitle = new TextView(this);
@@ -455,11 +456,21 @@ public class MainActivity extends AppCompatActivity {
             String type   = getFileType(uri);
             ContentValues val = new ContentValues();
             val.put("pdf_uri",     uriStr);
-            val.put("custom_name", name);
             val.put("file_type",   type);
             val.put("last_page",   0);
             val.put("last_opened", new java.util.Date().toString());
-            db.insertWithOnConflict("library", null, val, SQLiteDatabase.CONFLICT_REPLACE);
+            // Zaten kayıtlıysa custom_name'i korumak için önce kontrol et
+            android.database.Cursor chk = db.rawQuery(
+                "SELECT custom_name FROM library WHERE pdf_uri=?", new String[]{uriStr});
+            if (chk.moveToFirst() && chk.getString(0) != null && !chk.getString(0).isEmpty()) {
+                // Zaten var, sadece last_opened güncelle
+                db.update("library", val, "pdf_uri=?", new String[]{uriStr});
+            } else {
+                // Yeni kayıt
+                val.put("custom_name", name);
+                db.insertWithOnConflict("library", null, val, SQLiteDatabase.CONFLICT_REPLACE);
+            }
+            chk.close();
             startOcrIndexing(uriStr, type);
             openFile(uriStr, 0, type);
         }
