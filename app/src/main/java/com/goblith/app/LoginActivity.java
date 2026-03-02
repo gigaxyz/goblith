@@ -64,7 +64,7 @@ public class LoginActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.setMargins(0, 0, 0, 16);
         btnGoogle.setLayoutParams(lp);
-        btnGoogle.setOnClickListener(v -> signInWithGoogle());
+        btnGoogle.setOnClickListener(v -> signInAnonymously());
         root.addView(btnGoogle);
 
         Button btnGuest = new Button(this);
@@ -87,6 +87,13 @@ public class LoginActivity extends Activity {
         root.addView(info);
 
         setContentView(root);
+    }
+
+    private void signInAnonymously() {
+        com.google.firebase.auth.FirebaseAuth.getInstance()
+            .signInAnonymously()
+            .addOnSuccessListener(r -> startMain())
+            .addOnFailureListener(e -> Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_SHORT).show());
     }
 
     private void signInWithGoogle() {
