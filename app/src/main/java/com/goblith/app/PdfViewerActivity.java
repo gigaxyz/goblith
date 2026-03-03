@@ -756,7 +756,15 @@ public class PdfViewerActivity extends AppCompatActivity {
             int h=(int)((float)page.getHeight()/page.getWidth()*w);
             imgWidth=w; imgHeight=h;
             if(drawingOverlay!=null){drawingOverlay.imgW=w;drawingOverlay.imgH=h;}
-            Bitmap bmp=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
+            // OOM koruması
+            System.gc();
+            Bitmap bmp;
+            try {
+                bmp=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
+            } catch (OutOfMemoryError oom) {
+                int w2 = w/2, h2 = h/2;
+                bmp=Bitmap.createBitmap(w2,h2,Bitmap.Config.ARGB_8888);
+            }
             new Canvas(bmp).drawColor(Color.WHITE);
             page.render(bmp,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
             page.close();
@@ -764,8 +772,9 @@ public class PdfViewerActivity extends AppCompatActivity {
             pageInfo.setText((index+1)+" / "+totalPages);
             loadPageDrawings(index);
             ContentValues cv=new ContentValues();
-            cv.put("pdf_uri",pdfUri);cv.put("last_page",index);cv.put("last_opened",new java.util.Date().toString());
-            db.insertWithOnConflict("library",null,cv,SQLiteDatabase.CONFLICT_REPLACE);
+            cv.put("last_page",index);
+            cv.put("last_opened",new java.util.Date().toString());
+            db.update("library",cv,"pdf_uri=?",new String[]{pdfUri});
         }catch(Exception e){Toast.makeText(this,"Sayfa yüklenemedi: "+e.getMessage(),Toast.LENGTH_SHORT).show();}
     }
 
