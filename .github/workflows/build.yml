@@ -30,10 +30,6 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug
 
-      - name: Sign APK
-        run: |
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256             -keystore ~/.android/debug.keystore             -storepass android -keypass android             app/build/outputs/apk/debug/app-debug.apk androiddebugkey
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
