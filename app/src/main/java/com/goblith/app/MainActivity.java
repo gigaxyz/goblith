@@ -38,6 +38,14 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Global crash yakalayıcı
+        Thread.setDefaultUncaughtExceptionHandler((thread, ex) -> {
+            android.util.Log.e("GOBLITH_CRASH", "CRASH: " + ex.getMessage(), ex);
+            android.content.SharedPreferences prefs = getSharedPreferences("crash", MODE_PRIVATE);
+            prefs.edit().putString("last_crash", ex.toString() + "\n" + 
+                android.util.Log.getStackTraceString(ex)).apply();
+            android.os.Process.killProcess(android.os.Process.myPid());
+        });
         db = new DBHelper().getWritableDatabase();
 
         LinearLayout root = new LinearLayout(this);
@@ -480,7 +488,21 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    @Override protected void onResume() { super.onResume(); loadLibrary(); }
+    @Override protected void onResume() {
+        super.onResume();
+        // Son crash'i göster
+        android.content.SharedPreferences prefs = getSharedPreferences("crash", MODE_PRIVATE);
+        String crash = prefs.getString("last_crash", null);
+        if (crash != null) {
+            prefs.edit().remove("last_crash").apply();
+            new android.app.AlertDialog.Builder(this)
+                .setTitle("Son Hata")
+                .setMessage(crash.substring(0, Math.min(crash.length(), 500)))
+                .setPositiveButton("Tamam", null)
+                .show();
+        }
+        loadLibrary();
+    }
 
     class DBHelper extends SQLiteOpenHelper {
         DBHelper() { super(MainActivity.this, "goblith.db", null, 8); }
