@@ -44,13 +44,17 @@ public class MainActivity extends AppCompatActivity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xFF0F0E17);
 
-        // Kullanıcı bilgisi
-        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        if (user != null) {
-            SyncManager sync = new SyncManager(this, db);
-            sync.pullLibrary(() -> runOnUiThread(this::loadLibrary));
-            new android.os.Handler().postDelayed(() -> sync.syncAll(), 3000);
-        }
+        // Kullanıcı bilgisi — try/catch ile güvenli
+        try {
+            com.google.firebase.auth.FirebaseUser user = 
+                com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser();
+            if (user != null && !user.isAnonymous()) {
+                SyncManager sync = new SyncManager(this, db);
+                new android.os.Handler().postDelayed(() -> {
+                    try { sync.syncAll(); } catch (Exception ignored) {}
+                }, 5000);
+            }
+        } catch (Exception ignored) {}
 
 
         // Başlık
