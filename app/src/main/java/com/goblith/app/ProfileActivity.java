@@ -621,9 +621,99 @@ public class ProfileActivity extends Activity {
 
     private void showSettingsDialog() {
         new android.app.AlertDialog.Builder(this)
-            .setTitle("Gizlilik Ayarları")
-            .setItems(new String[]{"Profilimi Herkese Açık Yap", "Sadece Arkadaşlarıma Göster", "Gizli Tut"},
-                (d, w) -> Toast.makeText(this, "Ayar kaydedildi", Toast.LENGTH_SHORT).show())
+            .setTitle("Ayarlar")
+            .setItems(new String[]{
+                "🎨 Tema Seç",
+                "🔒 Gizlilik",
+                "🗑 Hesabı Sil"
+            }, (d, which) -> {
+                switch (which) {
+                    case 0: showThemeDialog(); break;
+                    case 1: showPrivacyDialog(); break;
+                    case 2: showDeleteAccountDialog(); break;
+                }
+            })
+            .show();
+    }
+
+    private void showThemeDialog() {
+        android.content.SharedPreferences prefs = getSharedPreferences("settings", MODE_PRIVATE);
+        String current = prefs.getString("theme", "dark_purple");
+        String[] themes = {"Karanlık Mor", "Tam Siyah", "Lacivert", "Koyu Yeşil"};
+        String[] keys = {"dark_purple", "pure_black", "navy", "dark_green"};
+        int[] colors = {0xFF7C3AED, 0xFF000000, 0xFF1E3A5F, 0xFF1A3A2A};
+        int[] bgColors = {0xFF0F0E17, 0xFF000000, 0xFF0A1628, 0xFF0A1A0F};
+
+        int selected = 0;
+        for (int i = 0; i < keys.length; i++) if (keys[i].equals(current)) { selected = i; break; }
+        final int[] sel = {selected};
+
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Tema Seç")
+            .setSingleChoiceItems(themes, selected, (d, w) -> sel[0] = w)
+            .setPositiveButton("Uygula", (d, w) -> {
+                prefs.edit()
+                    .putString("theme", keys[sel[0]])
+                    .putInt("accent_color", colors[sel[0]])
+                    .putInt("bg_color", bgColors[sel[0]])
+                    .apply();
+                Toast.makeText(this, themes[sel[0]] + " teması uygulandı", Toast.LENGTH_SHORT).show();
+                recreate();
+            })
+            .setNegativeButton("İptal", null)
+            .show();
+    }
+
+    private void showPrivacyDialog() {
+        android.content.SharedPreferences prefs = getSharedPreferences("settings", MODE_PRIVATE);
+        String[] options = {"Herkese Açık", "Sadece Arkadaşlar", "Gizli"};
+        int current = prefs.getInt("privacy", 0);
+        final int[] sel = {current};
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Profil Gizliliği")
+            .setSingleChoiceItems(options, current, (d, w) -> sel[0] = w)
+            .setPositiveButton("Kaydet", (d, w) -> {
+                prefs.edit().putInt("privacy", sel[0]).apply();
+                if (user != null && !user.isAnonymous()) {
+                    java.util.Map<String, Object> data = new java.util.HashMap<>();
+                    data.put("privacy", options[sel[0]]);
+                    firestore.collection("users").document(user.getUid())
+                        .set(data, SetOptions.merge());
+                }
+                Toast.makeText(this, "Gizlilik ayarı kaydedildi", Toast.LENGTH_SHORT).show();
+            })
+            .setNegativeButton("İptal", null)
+            .show();
+    }
+
+    private void showDeleteAccountDialog() {
+        if (user == null || user.isAnonymous()) {
+            Toast.makeText(this, "Silinecek hesap yok", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Hesabı Sil")
+            .setMessage("Hesabınız ve tüm verileriniz kalıcı olarak silinecek. Bu işlem geri alınamaz.")
+            .setPositiveButton("Evet, Sil", (d, w) -> {
+                // Firestore verilerini sil
+                firestore.collection("users").document(user.getUid()).delete();
+                firestore.collection("archive")
+                    .whereEqualTo("uid", user.getUid()).get()
+                    .addOnSuccessListener(docs -> {
+                        for (com.google.firebase.firestore.DocumentSnapshot doc : docs)
+                            doc.getReference().delete();
+                    });
+                // Firebase Auth hesabını sil
+                user.delete().addOnSuccessListener(v -> {
+                    deleteDatabase("goblith.db");
+                    Toast.makeText(this, "Hesap silindi", Toast.LENGTH_SHORT).show();
+                    Intent i = new Intent(this, LoginActivity.class);
+                    i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    startActivity(i);
+                }).addOnFailureListener(e ->
+                    Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            })
+            .setNegativeButton("İptal", null)
             .show();
     }
 

@@ -38,6 +38,12 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Tema uygula
+        try {
+            android.content.SharedPreferences prefs = getSharedPreferences("settings", MODE_PRIVATE);
+            int bgColor = prefs.getInt("bg_color", 0xFF0F0E17);
+            getWindow().getDecorView().setBackgroundColor(bgColor);
+        } catch (Exception ignored) {}
         // Global crash yakalayıcı
         Thread.setDefaultUncaughtExceptionHandler((thread, ex) -> {
             android.util.Log.e("GOBLITH_CRASH", "CRASH: " + ex.getMessage(), ex);
