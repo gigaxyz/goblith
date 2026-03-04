@@ -13,6 +13,25 @@ public class ProfileActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        Thread.setDefaultUncaughtExceptionHandler((thread, ex) -> {
+            android.content.SharedPreferences p = getSharedPreferences("crash", MODE_PRIVATE);
+            p.edit().putString("profile_crash", ex.getClass().getName() + ": " + ex.getMessage() +
+                "\n" + android.util.Log.getStackTraceString(ex)).apply();
+            finish();
+        });
+        
+        // Son crash göster
+        android.content.SharedPreferences p = getSharedPreferences("crash", MODE_PRIVATE);
+        String crash = p.getString("profile_crash", null);
+        if (crash != null) {
+            p.edit().remove("profile_crash").apply();
+            new android.app.AlertDialog.Builder(this)
+                .setTitle("Hata")
+                .setMessage(crash.length() > 800 ? crash.substring(0, 800) : crash)
+                .setPositiveButton("Tamam", null)
+                .show();
+        }
+
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
 
         LinearLayout root = new LinearLayout(this);
