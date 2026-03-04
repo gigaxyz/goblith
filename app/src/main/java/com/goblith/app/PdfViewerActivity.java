@@ -276,6 +276,12 @@ public class PdfViewerActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Thread.setDefaultUncaughtExceptionHandler((thread, ex) -> {
+            android.content.SharedPreferences p = getSharedPreferences("crash", MODE_PRIVATE);
+            p.edit().putString("pdf_crash", ex.getClass().getName() + ": " + ex.getMessage() + 
+                "\n" + android.util.Log.getStackTraceString(ex)).apply();
+            finish();
+        });
         try {
             db = new DBHelper().getWritableDatabase();
         } catch (Exception e) {
