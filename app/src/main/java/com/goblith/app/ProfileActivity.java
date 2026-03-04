@@ -212,7 +212,14 @@ public class ProfileActivity extends Activity {
         statsLp.setMargins(0, 0, 0, 20);
         statsContainer.setLayoutParams(statsLp);
         root.addView(statsContainer);
-        loadStats(accentColor);
+        new Thread(() -> {
+            int[] stats = getStats();
+            runOnUiThread(() -> {
+                statsContainer.addView(makeStatCard("📚", String.valueOf(stats[0]), "Kitap", accentColor));
+                statsContainer.addView(makeStatCard("📄", String.valueOf(stats[1]), "Sayfa", accentColor));
+                statsContainer.addView(makeStatCard("💎", String.valueOf(stats[2]), "Alıntı", accentColor));
+            });
+        }).start();
 
         // ── Rozetler ─────────────────────────────────────────────────────────
         root.addView(makeSectionTitle("ROZETLER"));
@@ -231,7 +238,10 @@ public class ProfileActivity extends Activity {
         hSv.setLayoutParams(badgeLp);
         hSv.addView(badgeContainer);
         root.addView(hSv);
-        loadBadges();
+        new Thread(() -> {
+            int[] stats = getStats();
+            runOnUiThread(() -> showBadges(stats[0], stats[1], stats[2]));
+        }).start();
 
         // ── Ayarlar ──────────────────────────────────────────────────────────
         root.addView(makeSectionTitle("HESAP"));
@@ -541,6 +551,31 @@ public class ProfileActivity extends Activity {
             });
     }
 
+    private int[] getStats() {
+        int archiveCount = 0, bookCount = 0, totalPages = 0;
+        if (db != null) {
+            try {
+                android.database.Cursor c = db.rawQuery("SELECT COUNT(*) FROM archive", null);
+                if (c.moveToFirst()) archiveCount = c.getInt(0); c.close();
+            } catch (Exception ignored) {}
+            try {
+                android.database.Cursor c = db.rawQuery("SELECT COUNT(*), COALESCE(SUM(last_page),0) FROM library", null);
+                if (c.moveToFirst()) { bookCount = c.getInt(0); totalPages = c.getInt(1); } c.close();
+            } catch (Exception ignored) {}
+        }
+        return new int[]{bookCount, totalPages, archiveCount};
+    }
+
+    private void showBadges(int bookCount, int totalPages, int archiveCount) {
+        if (bookCount >= 1) addBadge("📖", "İlk Kitap");
+        if (bookCount >= 5) addBadge("📚", "Kitapsever");
+        if (totalPages >= 100) addBadge("📄", "100 Sayfa");
+        if (totalPages >= 500) addBadge("🔥", "500 Sayfa");
+        if (archiveCount >= 10) addBadge("💎", "10 Alıntı");
+        if (archiveCount >= 50) addBadge("🏆", "50 Alıntı");
+        if (badgeContainer.getChildCount() == 0) addBadge("🌱", "Yeni Başlayan");
+    }
+
     private void loadStats(int accentColor) {
         if (db == null) return;
         int archiveCount = 0, bookCount = 0, totalPages = 0;
@@ -557,25 +592,7 @@ public class ProfileActivity extends Activity {
         statsContainer.addView(makeStatCard("💎", String.valueOf(archiveCount), "Alıntı", accentColor));
     }
 
-    private void loadBadges() {
-        if (db == null) return;
-        int archiveCount = 0, bookCount = 0, totalPages = 0;
-        try {
-            android.database.Cursor c = db.rawQuery("SELECT COUNT(*) FROM archive", null);
-            if (c.moveToFirst()) archiveCount = c.getInt(0); c.close();
-        } catch (Exception ignored) {}
-        try {
-            android.database.Cursor c = db.rawQuery("SELECT COUNT(*), COALESCE(SUM(last_page),0) FROM library", null);
-            if (c.moveToFirst()) { bookCount = c.getInt(0); totalPages = c.getInt(1); } c.close();
-        } catch (Exception ignored) {}
-        if (bookCount >= 1) addBadge("📖", "İlk Kitap");
-        if (bookCount >= 5) addBadge("📚", "Kitapsever");
-        if (totalPages >= 100) addBadge("📄", "100 Sayfa");
-        if (totalPages >= 500) addBadge("🔥", "500 Sayfa");
-        if (archiveCount >= 10) addBadge("💎", "10 Alıntı");
-        if (archiveCount >= 50) addBadge("🏆", "50 Alıntı");
-        if (badgeContainer.getChildCount() == 0) addBadge("🌱", "Yeni Başlayan");
-    }
+    private void loadBadges() { /* background thread kullanılıyor */ }
 
     private void addBadge(String emoji, String label) {
         LinearLayout badge = new LinearLayout(this);
