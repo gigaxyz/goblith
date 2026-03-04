@@ -540,6 +540,10 @@ public class MainActivity extends AppCompatActivity {
     class DBHelper extends SQLiteOpenHelper {
         DBHelper() { super(MainActivity.this, "goblith.db", null, 8); }
         @Override public void onCreate(SQLiteDatabase db) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS archive (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, book_name TEXT, page INTEGER, quote TEXT, topic TEXT, importance INTEGER DEFAULT 2, source_info TEXT, created_at TEXT)");
+            db.execSQL("CREATE TABLE IF NOT EXISTS pdf_ocr_cache (pdf_uri TEXT, page INTEGER, ocr_text TEXT, blocks TEXT, PRIMARY KEY(pdf_uri, page))");
+            db.execSQL("CREATE TABLE IF NOT EXISTS search_history (pdf_uri TEXT, query TEXT, found_page INTEGER, ts DATETIME DEFAULT CURRENT_TIMESTAMP)");
+            db.execSQL("CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, note TEXT, type TEXT, tag TEXT, created_at TEXT)");
             db.execSQL("CREATE TABLE IF NOT EXISTS highlights (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, color TEXT, note TEXT, tag TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
             db.execSQL("CREATE TABLE IF NOT EXISTS library (pdf_uri TEXT PRIMARY KEY, custom_name TEXT, file_type TEXT DEFAULT 'PDF', last_page INTEGER DEFAULT 0, last_opened TEXT)");
             db.execSQL("CREATE TABLE IF NOT EXISTS page_highlights (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, page INTEGER, x1 REAL, y1 REAL, x2 REAL, y2 REAL, color TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
