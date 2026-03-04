@@ -222,7 +222,7 @@ public class MainActivity extends android.app.Activity {
         b.setPadding(8, 20, 8, 20);
         b.setLetterSpacing(0.08f);
         try {
-            android.graphics.drawable.Drawable icon = androidx.core.content.getResources().getDrawable( iconRes);
+            android.graphics.drawable.Drawable icon = getDrawable(iconRes);
             if (icon != null) {
                 icon.setBounds(0, 0, 52, 52);
                 icon.setTint(0xFFE2D9F3);
