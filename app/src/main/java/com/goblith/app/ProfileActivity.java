@@ -26,7 +26,6 @@ public class ProfileActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
 
         prefs = getSharedPreferences("settings", MODE_PRIVATE);
         user = FirebaseAuth.getInstance().getCurrentUser();
@@ -280,7 +279,6 @@ public class ProfileActivity extends Activity {
     @Override
     public void finish() {
         super.finish();
-        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
     }
 
     private int[] getStats() {

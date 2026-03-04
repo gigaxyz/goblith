@@ -12,23 +12,49 @@
         android:theme="@style/AppTheme"
         android:hardwareAccelerated="true"
         android:supportsRtl="true">
-        <activity android:name=".LoginActivity" android:exported="true">
+        <activity android:name=".LoginActivity"
+            android:exported="true"
+            android:theme="@style/AppTheme">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <activity android:name=".MainActivity" android:exported="true"/>
-        <activity android:name=".PdfViewerActivity" android:exported="false"/>
-        <activity android:name=".NotesActivity" android:exported="false"/>
-        <activity android:name=".WordAnalysisActivity" android:exported="false"/>
-        <activity android:name=".StatsActivity" android:exported="false"/>
-        <activity android:name=".CrossRefActivity" android:exported="false"/>
-        <activity android:name=".FlashcardActivity" android:exported="false"/>
-        <activity android:name=".ReadingListActivity" android:exported="false"/>
-        <activity android:name=".ArchiveActivity" android:exported="false"/>
-        <activity android:name=".CommunityArchiveActivity" android:exported="false"/>
-        <activity android:name=".SearchActivity" android:exported="false"/>
-        <activity android:name=".ProfileActivity" android:exported="false"/>
+        <activity android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/AppTheme"/>
+        <activity android:name=".PdfViewerActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme"/>
+        <activity android:name=".NotesActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme"/>
+        <activity android:name=".WordAnalysisActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme"/>
+        <activity android:name=".StatsActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme"/>
+        <activity android:name=".CrossRefActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme"/>
+        <activity android:name=".FlashcardActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme"/>
+        <activity android:name=".ReadingListActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme"/>
+        <activity android:name=".ArchiveActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme"/>
+        <activity android:name=".CommunityArchiveActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme"/>
+        <activity android:name=".SearchActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme"/>
+        <activity android:name=".ProfileActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme"/>
     </application>
 </manifest>
