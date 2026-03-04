@@ -31,7 +31,7 @@ public class ProfileActivity extends Activity {
         user = FirebaseAuth.getInstance().getCurrentUser();
         db = FirebaseFirestore.getInstance();
 
-        try { localDb = openOrCreateDatabase("goblith.db", MODE_PRIVATE, null); }
+        try { localDb = GoblithApp.getDb(); }
         catch (Exception e) { localDb = null; }
 
         int bgColor = prefs.getInt("bg_color", 0xFF0F0E17);

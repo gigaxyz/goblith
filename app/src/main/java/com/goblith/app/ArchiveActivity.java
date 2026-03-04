@@ -31,7 +31,7 @@ public class ArchiveActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         try {
-            db = new DBHelper().getWritableDatabase();
+            db = GoblithApp.getDb();
         } catch (Exception e) {
             Toast.makeText(this, "DB hatasi: " + e.getMessage(), Toast.LENGTH_LONG).show();
             finish(); return;

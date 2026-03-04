@@ -59,7 +59,7 @@ public class WordAnalysisActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        db = new DBHelper().getWritableDatabase();
+        db = GoblithApp.getDb();
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);

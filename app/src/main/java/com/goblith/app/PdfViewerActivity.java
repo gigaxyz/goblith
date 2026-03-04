@@ -283,7 +283,7 @@ public class PdfViewerActivity extends AppCompatActivity {
             finish();
         });
         try {
-            db = new DBHelper().getWritableDatabase();
+            db = GoblithApp.getDb();
         } catch (Exception e) {
             Toast.makeText(this,"DB hatası: "+e.getMessage(),Toast.LENGTH_LONG).show();
             finish(); return;
