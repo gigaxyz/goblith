@@ -18,7 +18,6 @@ import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
-import androidx.appcompat.app.AppCompatActivity;
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -31,7 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class WordAnalysisActivity extends AppCompatActivity {
+public class WordAnalysisActivity extends android.app.Activity {
 
     private LinearLayout resultsContainer;
     private SQLiteDatabase db;

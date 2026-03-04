@@ -41,9 +41,6 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.ContextCompat;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -52,7 +49,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class PdfViewerActivity extends AppCompatActivity {
+public class PdfViewerActivity extends android.app.Activity {
 
     static final int TOOL_HIGHLIGHT = 0;
     static final int TOOL_UNDERLINE = 1;
@@ -488,7 +485,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         btnNext.setOnTouchListener((v,e)->{if(e.getAction()==MotionEvent.ACTION_UP||e.getAction()==MotionEvent.ACTION_CANCEL)isFastScrolling=false;return false;});
 
         btnGo.setOnClickListener(v->{
-            AlertDialog.Builder b=new AlertDialog.Builder(this); b.setTitle("Sayfaya Git");
+            android.app.AlertDialog.Builder b=new android.app.AlertDialog.Builder(this); b.setTitle("Sayfaya Git");
             EditText in=new EditText(this); in.setInputType(InputType.TYPE_CLASS_NUMBER); in.setHint("1 - "+totalPages);
             b.setView(in);
             b.setPositiveButton("Git",(d,w)->{
@@ -499,7 +496,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         });
 
         btnBookmark.setOnClickListener(v->{
-            AlertDialog.Builder b=new AlertDialog.Builder(this);
+            android.app.AlertDialog.Builder b=new android.app.AlertDialog.Builder(this);
             b.setTitle("Yer İmi — Sayfa "+(currentPage+1));
             EditText in=new EditText(this); in.setHint("Başlık (isteğe bağlı)");
             b.setView(in);
@@ -556,7 +553,7 @@ public class PdfViewerActivity extends AppCompatActivity {
         try {
             db.execSQL("CREATE TABLE IF NOT EXISTS archive (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, book_name TEXT, page INTEGER, quote TEXT, topic TEXT, importance INTEGER DEFAULT 2, created_at TEXT)");
         } catch (Exception ignored) {}
-        AlertDialog.Builder b=new AlertDialog.Builder(this);
+        android.app.AlertDialog.Builder b=new android.app.AlertDialog.Builder(this);
         b.setTitle("📁 Arşive Ekle — Sayfa "+(currentPage+1));
 
         LinearLayout layout=new LinearLayout(this);
@@ -839,13 +836,13 @@ public class PdfViewerActivity extends AppCompatActivity {
         List<String>  labels=new ArrayList<>();List<Integer> pages=new ArrayList<>();
         do{pages.add(c.getInt(0));labels.add("Sayfa "+(c.getInt(0)+1)+" — "+c.getString(1));}while(c.moveToNext());
         c.close();
-        new AlertDialog.Builder(this).setTitle("Yer İmleri")
+        new android.app.AlertDialog.Builder(this).setTitle("Yer İmleri")
             .setItems(labels.toArray(new String[0]),(d,w)->showPage(pages.get(w)))
             .setNegativeButton("Kapat",null).show();
     }
 
     private void saveNote(String color,String label){
-        AlertDialog.Builder b=new AlertDialog.Builder(this);
+        android.app.AlertDialog.Builder b=new android.app.AlertDialog.Builder(this);
         b.setTitle(label+" — Sayfa "+(currentPage+1));
         LinearLayout layout=new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);layout.setPadding(32,16,32,8);
@@ -884,7 +881,7 @@ public class PdfViewerActivity extends AppCompatActivity {
 
 
     private void showAIDialog() {
-        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
+        android.app.android.app.AlertDialog.Builder b = new android.app.android.app.AlertDialog.Builder(this);
         b.setTitle("Yapay Zeka Asistanı");
         String[] options = {"Bu Sayfayı Özetle", "Bu Sayfa Hakkında Soru Sor", "Arşivimi Analiz Et"};
         b.setItems(options, (d, which) -> {
@@ -930,7 +927,7 @@ public class PdfViewerActivity extends AppCompatActivity {
     }
 
     private void askQuestionAboutPage() {
-        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
+        android.app.android.app.AlertDialog.Builder b = new android.app.android.app.AlertDialog.Builder(this);
         b.setTitle("Soru Sor");
         android.widget.EditText input = new android.widget.EditText(this);
         input.setHint("Bu sayfa hakkında sorunuzu yazın...");
@@ -998,7 +995,7 @@ public class PdfViewerActivity extends AppCompatActivity {
     }
 
     private void showAIResult(String title, String result) {
-        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
+        android.app.android.app.AlertDialog.Builder b = new android.app.android.app.AlertDialog.Builder(this);
         b.setTitle(title);
         android.widget.ScrollView sv = new android.widget.ScrollView(this);
         android.widget.TextView tv = new android.widget.TextView(this);
@@ -1024,7 +1021,7 @@ public class PdfViewerActivity extends AppCompatActivity {
     }
 
     private void showPdfSearchDialog() {
-        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
+        android.app.android.app.AlertDialog.Builder b = new android.app.android.app.AlertDialog.Builder(this);
         b.setTitle("PDF Metin Ara");
         android.widget.EditText input = new android.widget.EditText(this);
         input.setHint("Kelime veya cumle...");

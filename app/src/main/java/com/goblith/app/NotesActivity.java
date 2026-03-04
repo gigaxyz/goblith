@@ -17,12 +17,10 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
 import java.util.Arrays;
 import java.util.List;
 
-public class NotesActivity extends AppCompatActivity {
+public class NotesActivity extends android.app.Activity {
 
     private LinearLayout notesContainer;
     private LinearLayout tagFilterRow;
@@ -246,7 +244,7 @@ public class NotesActivity extends AppCompatActivity {
             final String currentTag = noteTag;
 
             btnEdit.setOnClickListener(v -> showEditDialog(noteId, currentNote, currentColor, currentTag));
-            btnDelete.setOnClickListener(v -> new AlertDialog.Builder(this)
+            btnDelete.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
                 .setTitle("Notu Sil")
                 .setMessage("Bu notu silmek istedigine emin misin?")
                 .setPositiveButton("Sil", (d, w) -> {
@@ -261,7 +259,7 @@ public class NotesActivity extends AppCompatActivity {
     }
 
     private void showEditDialog(int noteId, String currentNote, String currentColor, String currentTag) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
         builder.setTitle("Notu Duzenle");
 
         LinearLayout el = new LinearLayout(this);

@@ -10,8 +10,6 @@ import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
 import android.graphics.Typeface;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
@@ -21,7 +19,7 @@ import com.google.firebase.database.ValueEventListener;
 import java.util.HashMap;
 import java.util.Map;
 
-public class CommunityArchiveActivity extends AppCompatActivity {
+public class CommunityArchiveActivity extends android.app.Activity {
 
     private DatabaseReference dbRef;
     private LinearLayout listContainer;
@@ -86,7 +84,7 @@ public class CommunityArchiveActivity extends AppCompatActivity {
 
         // Kullanıcı adı al
         btnName.setOnClickListener(v -> {
-            AlertDialog.Builder b = new AlertDialog.Builder(this);
+            android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
             b.setTitle("Takma Adın");
             EditText in = new EditText(this);
             in.setHint("Adını gir...");
@@ -225,7 +223,7 @@ public class CommunityArchiveActivity extends AppCompatActivity {
                         listContainer.addView(card);
 
                         final String fKey = key;
-                        btnDel.setOnClickListener(v -> new AlertDialog.Builder(CommunityArchiveActivity.this)
+                        btnDel.setOnClickListener(v -> new android.app.AlertDialog.Builder(CommunityArchiveActivity.this)
                             .setTitle("Sil")
                             .setMessage("Bu paylaşım silinsin mi?")
                             .setPositiveButton("Sil", (d, w) -> {

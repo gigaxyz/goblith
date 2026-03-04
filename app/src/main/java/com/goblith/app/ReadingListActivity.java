@@ -13,12 +13,10 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ReadingListActivity extends AppCompatActivity {
+public class ReadingListActivity extends android.app.Activity {
 
     private SQLiteDatabase db;
     private LinearLayout listContainer;
@@ -247,7 +245,7 @@ public class ReadingListActivity extends AppCompatActivity {
         } while (c.moveToNext());
         c.close();
 
-        new AlertDialog.Builder(this)
+        new android.app.AlertDialog.Builder(this)
             .setTitle("Kitap Sec")
             .setItems(names.toArray(new String[0]), (d, which) -> {
                 ContentValues cv = new ContentValues();

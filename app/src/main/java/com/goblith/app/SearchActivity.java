@@ -14,13 +14,12 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-import androidx.appcompat.app.AppCompatActivity;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public class SearchActivity extends AppCompatActivity {
+public class SearchActivity extends android.app.Activity {
 
     private SQLiteDatabase db;
     private EditText searchInput;

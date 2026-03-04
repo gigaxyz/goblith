@@ -12,12 +12,11 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
-import androidx.appcompat.app.AppCompatActivity;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class FlashcardActivity extends AppCompatActivity {
+public class FlashcardActivity extends android.app.Activity {
 
     private SQLiteDatabase db;
     private List<String[]> cards = new ArrayList<>(); // [color, page, note, tag, bookName]

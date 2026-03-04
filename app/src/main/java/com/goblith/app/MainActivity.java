@@ -25,11 +25,8 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.ContextCompat;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends android.app.Activity {
 
     private static final int PICK_FILE = 1;
     private LinearLayout libraryContainer;
@@ -255,7 +252,7 @@ public class MainActivity extends AppCompatActivity {
             pages.add(c.getInt(0));
         } while (c.moveToNext());
         c.close();
-        new AlertDialog.Builder(this)
+        new android.app.AlertDialog.Builder(this)
             .setTitle("Tum Yer Imleri")
             .setItems(labels.toArray(new String[0]), (d, w) -> openFile(uris.get(w), pages.get(w), "PDF"))
             .setNegativeButton("Kapat", null)
@@ -380,7 +377,7 @@ public class MainActivity extends AppCompatActivity {
 
             card.setOnClickListener(v -> openFile(fUri, fPage, fType));
             btnRename.setOnClickListener(v -> {
-                AlertDialog.Builder b = new AlertDialog.Builder(this);
+                android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
                 b.setTitle("Adi Degistir");
                 EditText input = new EditText(this);
                 input.setText(fName);
@@ -401,7 +398,7 @@ public class MainActivity extends AppCompatActivity {
                 b.show();
             });
             btnDel.setOnClickListener(v ->
-                new AlertDialog.Builder(this)
+                new android.app.AlertDialog.Builder(this)
                     .setTitle("Kaldir")
                     .setMessage("\"" + fName + "\" listeden kaldirilsin mi?")
                     .setPositiveButton("Kaldir", (d, w) -> { db.delete("library","pdf_uri=?",new String[]{fUri}); loadLibrary(); })
@@ -544,7 +541,7 @@ public class MainActivity extends AppCompatActivity {
         String crash = prefs.getString("last_crash", null);
         if (crash != null) {
             prefs.edit().remove("last_crash").apply();
-            new android.app.AlertDialog.Builder(this)
+            new android.app.android.app.AlertDialog.Builder(this)
                 .setTitle("Son Hata")
                 .setMessage(crash.substring(0, Math.min(crash.length(), 500)))
                 .setPositiveButton("Tamam", null)

@@ -15,13 +15,12 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import androidx.appcompat.app.AppCompatActivity;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class CrossRefActivity extends AppCompatActivity {
+public class CrossRefActivity extends android.app.Activity {
 
     private LinearLayout resultsContainer;
     private SQLiteDatabase db;

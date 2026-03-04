@@ -14,12 +14,10 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ArchiveActivity extends AppCompatActivity {
+public class ArchiveActivity extends android.app.Activity {
 
     private SQLiteDatabase db;
     private LinearLayout listContainer;
@@ -94,7 +92,7 @@ public class ArchiveActivity extends AppCompatActivity {
         btnMid.setOnClickListener(v  -> { filterImportance=2; filterTopic=""; activateFilter(fBtns,2); loadArchive(); });
         btnLow.setOnClickListener(v  -> { filterImportance=1; filterTopic=""; activateFilter(fBtns,3); loadArchive(); });
         btnSrch.setOnClickListener(v -> {
-            AlertDialog.Builder b = new AlertDialog.Builder(this);
+            android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
             b.setTitle("Konuya Gore Ara");
             EditText in = new EditText(this);
             in.setHint("Konu adi...");
@@ -255,7 +253,7 @@ public class ArchiveActivity extends AppCompatActivity {
                 startActivity(i);
             });
 
-            btnDel.setOnClickListener(v -> new AlertDialog.Builder(this)
+            btnDel.setOnClickListener(v -> new android.app.AlertDialog.Builder(this)
                 .setTitle("Sil")
                 .setMessage("Bu arsiv kaydi silinsin mi?")
                 .setPositiveButton("Sil", (d, w) -> {

@@ -10,9 +10,8 @@ import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import androidx.appcompat.app.AppCompatActivity;
 
-public class StatsActivity extends AppCompatActivity {
+public class StatsActivity extends android.app.Activity {
 
     private SQLiteDatabase db;
 
