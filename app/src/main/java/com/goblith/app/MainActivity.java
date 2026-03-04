@@ -155,6 +155,10 @@ public class MainActivity extends AppCompatActivity {
         root.addView(sv);
 
         setContentView(root);
+        // Boş/geçersiz kayıtları temizle
+        try {
+            db.delete("library", "pdf_uri IS NULL OR pdf_uri=''", null);
+        } catch (Exception ignored) {}
         loadLibrary();
 
         // Tıklama olayları
@@ -379,7 +383,11 @@ public class MainActivity extends AppCompatActivity {
                     ContentValues val = new ContentValues();
                     val.put("custom_name", input.getText().toString().trim());
                     db.update("library", val, "pdf_uri=?", new String[]{fUri});
-                    loadLibrary();
+                    // Boş/geçersiz kayıtları temizle
+        try {
+            db.delete("library", "pdf_uri IS NULL OR pdf_uri=''", null);
+        } catch (Exception ignored) {}
+        loadLibrary();
                 });
                 b.setNegativeButton("Iptal", null);
                 b.show();
@@ -534,6 +542,10 @@ public class MainActivity extends AppCompatActivity {
                 .setPositiveButton("Tamam", null)
                 .show();
         }
+        // Boş/geçersiz kayıtları temizle
+        try {
+            db.delete("library", "pdf_uri IS NULL OR pdf_uri=''", null);
+        } catch (Exception ignored) {}
         loadLibrary();
     }
 
