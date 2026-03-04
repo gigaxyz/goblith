@@ -135,6 +135,11 @@ public class SyncManager {
                     Long lp = doc.getLong("last_page");
                     cv.put("last_page", lp != null ? lp.intValue() : 0);
                     cv.put("last_opened", doc.getString("last_opened"));
+                    String pUri = doc.getString("pdf_uri");
+                    String pName = doc.getString("custom_name");
+                    if (pUri == null || pUri.isEmpty()) continue;
+                    if (pName == null || pName.isEmpty()) pName = "Bilinmeyen";
+                    cv.put("custom_name", pName);
                     localDb.insertWithOnConflict("library", null, cv,
                         SQLiteDatabase.CONFLICT_IGNORE);
                 }

@@ -10,14 +10,14 @@ import android.view.*;
 import android.widget.*;
 import com.google.firebase.auth.*;
 import com.google.firebase.firestore.*;
-import com.google.firebase.storage.*;
+
 import java.util.*;
 
 public class ProfileActivity extends Activity {
     private static final int PICK_IMAGE = 101;
     private FirebaseUser user;
     private FirebaseFirestore firestore;
-    private FirebaseStorage storage;
+    
     private android.database.sqlite.SQLiteDatabase db;
     private ImageView photoView;
     private TextView nameView, bioView;
@@ -35,7 +35,7 @@ public class ProfileActivity extends Activity {
 
         user = FirebaseAuth.getInstance().getCurrentUser();
         firestore = FirebaseFirestore.getInstance();
-        storage = FirebaseStorage.getInstance();
+
 
         try {
             db = openOrCreateDatabase("goblith.db", MODE_PRIVATE, null);
@@ -280,25 +280,32 @@ public class ProfileActivity extends Activity {
     }
 
     private void loadPhoto() {
-        if (user == null) return;
-        // Önce Firebase Storage'dan özel fotoğrafı dene
-        if (user.getUid() != null) {
-            storage.getReference("profile_photos/" + user.getUid() + ".jpg")
-                .getDownloadUrl()
-                .addOnSuccessListener(uri -> loadBitmap(uri.toString()))
-                .addOnFailureListener(e -> {
-                    // Yoksa Google fotoğrafını kullan
-                    if (user.getPhotoUrl() != null) {
-                        loadBitmap(user.getPhotoUrl().toString());
-                    } else {
-                        showInitial();
+        if (user == null) { showInitial(); return; }
+        // Firestore'dan base64 fotoğraf yükle
+        firestore.collection("users").document(user.getUid()).get()
+            .addOnSuccessListener(doc -> {
+                if (doc.contains("photo_base64")) {
+                    String b64 = doc.getString("photo_base64");
+                    if (b64 != null && !b64.isEmpty()) {
+                        try {
+                            byte[] bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+                            Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                            photoView.setImageBitmap(toRoundBitmap(bmp));
+                            return;
+                        } catch (Exception ignored) {}
                     }
-                });
-        } else if (user.getPhotoUrl() != null) {
-            loadBitmap(user.getPhotoUrl().toString());
-        } else {
-            showInitial();
-        }
+                }
+                // Firestore'da yoksa Google fotoğrafı
+                if (user.getPhotoUrl() != null) {
+                    loadBitmap(user.getPhotoUrl().toString());
+                } else {
+                    showInitial();
+                }
+            })
+            .addOnFailureListener(e -> {
+                if (user.getPhotoUrl() != null) loadBitmap(user.getPhotoUrl().toString());
+                else showInitial();
+            });
     }
 
     private void loadBitmap(String url) {
@@ -360,16 +367,42 @@ public class ProfileActivity extends Activity {
     }
 
     private void uploadPhoto(Uri uri) {
+        if (user == null || user.isAnonymous()) {
+            Toast.makeText(this, "Giriş yapmanız gerekiyor", Toast.LENGTH_SHORT).show();
+            return;
+        }
         Toast.makeText(this, "Fotoğraf yükleniyor...", Toast.LENGTH_SHORT).show();
-        StorageReference ref = storage.getReference("profile_photos/" + user.getUid() + ".jpg");
-        ref.putFile(uri)
-            .addOnSuccessListener(snap -> ref.getDownloadUrl()
-                .addOnSuccessListener(downloadUri -> {
-                    loadBitmap(downloadUri.toString());
-                    Toast.makeText(this, "Fotoğraf güncellendi", Toast.LENGTH_SHORT).show();
-                }))
-            .addOnFailureListener(e ->
-                Toast.makeText(this, "Yükleme hatası: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+        new Thread(() -> {
+            try {
+                java.io.InputStream is = getContentResolver().openInputStream(uri);
+                Bitmap bmp = BitmapFactory.decodeStream(is);
+                // Boyutu küçült — Firestore limiti için
+                Bitmap scaled = Bitmap.createScaledBitmap(bmp, 256, 256, true);
+                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                scaled.compress(Bitmap.CompressFormat.JPEG, 70, baos);
+                String b64 = android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.DEFAULT);
+                firestore.collection("users").document(user.getUid())
+                    .update("photo_base64", b64)
+                    .addOnSuccessListener(v -> runOnUiThread(() -> {
+                        photoView.setImageBitmap(toRoundBitmap(scaled));
+                        Toast.makeText(this, "Fotoğraf güncellendi ✓", Toast.LENGTH_SHORT).show();
+                    }))
+                    .addOnFailureListener(e -> {
+                        // update başarısız olursa set dene
+                        java.util.Map<String, Object> data = new java.util.HashMap<>();
+                        data.put("photo_base64", b64);
+                        firestore.collection("users").document(user.getUid()).set(data, SetOptions.merge())
+                            .addOnSuccessListener(v -> runOnUiThread(() -> {
+                                photoView.setImageBitmap(toRoundBitmap(scaled));
+                                Toast.makeText(this, "Fotoğraf güncellendi ✓", Toast.LENGTH_SHORT).show();
+                            }))
+                            .addOnFailureListener(e2 -> runOnUiThread(() ->
+                                Toast.makeText(this, "Hata: " + e2.getMessage(), Toast.LENGTH_LONG).show()));
+                    });
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }).start();
     }
 
     private void editName() {
