@@ -222,7 +222,7 @@ public class MainActivity extends android.app.Activity {
         b.setPadding(8, 20, 8, 20);
         b.setLetterSpacing(0.08f);
         try {
-            android.graphics.drawable.Drawable icon = androidx.core.content.ContextCompat.getDrawable(this, iconRes);
+            android.graphics.drawable.Drawable icon = androidx.core.content.getResources().getDrawable( iconRes);
             if (icon != null) {
                 icon.setBounds(0, 0, 52, 52);
                 icon.setTint(0xFFE2D9F3);
@@ -541,7 +541,7 @@ public class MainActivity extends android.app.Activity {
         String crash = prefs.getString("last_crash", null);
         if (crash != null) {
             prefs.edit().remove("last_crash").apply();
-            new android.app.android.app.AlertDialog.Builder(this)
+            new android.app.AlertDialog.Builder(this)
                 .setTitle("Son Hata")
                 .setMessage(crash.substring(0, Math.min(crash.length(), 500)))
                 .setPositiveButton("Tamam", null)

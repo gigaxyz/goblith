@@ -881,7 +881,7 @@ public class PdfViewerActivity extends android.app.Activity {
 
 
     private void showAIDialog() {
-        android.app.android.app.AlertDialog.Builder b = new android.app.android.app.AlertDialog.Builder(this);
+        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
         b.setTitle("Yapay Zeka Asistanı");
         String[] options = {"Bu Sayfayı Özetle", "Bu Sayfa Hakkında Soru Sor", "Arşivimi Analiz Et"};
         b.setItems(options, (d, which) -> {
@@ -927,7 +927,7 @@ public class PdfViewerActivity extends android.app.Activity {
     }
 
     private void askQuestionAboutPage() {
-        android.app.android.app.AlertDialog.Builder b = new android.app.android.app.AlertDialog.Builder(this);
+        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
         b.setTitle("Soru Sor");
         android.widget.EditText input = new android.widget.EditText(this);
         input.setHint("Bu sayfa hakkında sorunuzu yazın...");
@@ -995,7 +995,7 @@ public class PdfViewerActivity extends android.app.Activity {
     }
 
     private void showAIResult(String title, String result) {
-        android.app.android.app.AlertDialog.Builder b = new android.app.android.app.AlertDialog.Builder(this);
+        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
         b.setTitle(title);
         android.widget.ScrollView sv = new android.widget.ScrollView(this);
         android.widget.TextView tv = new android.widget.TextView(this);
@@ -1021,7 +1021,7 @@ public class PdfViewerActivity extends android.app.Activity {
     }
 
     private void showPdfSearchDialog() {
-        android.app.android.app.AlertDialog.Builder b = new android.app.android.app.AlertDialog.Builder(this);
+        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
         b.setTitle("PDF Metin Ara");
         android.widget.EditText input = new android.widget.EditText(this);
         input.setHint("Kelime veya cumle...");
@@ -1701,7 +1701,7 @@ public class PdfViewerActivity extends android.app.Activity {
     private Button makeActionBtn(String t,int c){Button b=new Button(this);b.setText(t);b.setBackgroundColor(c);b.setTextColor(0xFFFFFFFF);b.setTextSize(13);b.setTypeface(null,android.graphics.Typeface.BOLD);b.setPadding(16,12,16,12);return b;}
     private Button makeIconBtn(String t,int iconRes,int c){
         Button b=new Button(this);b.setText(t);b.setBackgroundColor(c);b.setTextColor(0xFFFFFFFF);b.setTextSize(10);b.setTypeface(null,android.graphics.Typeface.BOLD);b.setGravity(Gravity.CENTER);b.setPadding(4,10,4,10);
-        try{Drawable icon=ContextCompat.getDrawable(this,iconRes);if(icon!=null){icon.setBounds(0,0,40,40);b.setCompoundDrawables(null,icon,null,null);b.setCompoundDrawablePadding(4);}}catch(Exception ignored){}
+        try{Drawable icon=getResources().getDrawable(iconRes);if(icon!=null){icon.setBounds(0,0,40,40);b.setCompoundDrawables(null,icon,null,null);b.setCompoundDrawablePadding(4);}}catch(Exception ignored){}
         b.setLayoutParams(new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));return b;
     }
     private Button flex(Button b,int lm){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1);lp.setMargins(lm,0,0,0);b.setLayoutParams(lp);return b;}
