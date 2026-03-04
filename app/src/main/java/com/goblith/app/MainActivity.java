@@ -66,14 +66,47 @@ public class MainActivity extends AppCompatActivity {
 
 
         // Başlık
+        // Üst bar — logo + profil butonu
+        LinearLayout topBar = new LinearLayout(this);
+        topBar.setOrientation(LinearLayout.HORIZONTAL);
+        topBar.setGravity(Gravity.CENTER_VERTICAL);
+        topBar.setPadding(24, 48, 24, 4);
+
         TextView title = new TextView(this);
         title.setText("Goblith");
         title.setTextColor(0xFF6D28D9);
         title.setTextSize(36);
         title.setTypeface(null, Typeface.BOLD);
-        title.setPadding(24, 48, 24, 4);
-        title.setOnClickListener(v -> startActivity(new Intent(this, ProfileActivity.class)));
-        root.addView(title);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
+        title.setLayoutParams(titleLp);
+        topBar.addView(title);
+
+        // Profil butonu — yuvarlak
+        com.google.firebase.auth.FirebaseUser fUser =
+            com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser();
+        TextView profileBtn = new TextView(this);
+        if (fUser != null && !fUser.isAnonymous() && fUser.getDisplayName() != null) {
+            profileBtn.setText(String.valueOf(fUser.getDisplayName().charAt(0)).toUpperCase());
+        } else {
+            profileBtn.setText("?");
+        }
+        profileBtn.setTextColor(0xFFFFFFFF);
+        profileBtn.setTextSize(18);
+        profileBtn.setTypeface(null, Typeface.BOLD);
+        profileBtn.setGravity(Gravity.CENTER);
+        profileBtn.setBackgroundColor(0xFF7C3AED);
+        int size = (int)(48 * getResources().getDisplayMetrics().density);
+        LinearLayout.LayoutParams profileLp = new LinearLayout.LayoutParams(size, size);
+        profileBtn.setLayoutParams(profileLp);
+        // Yuvarlak arka plan
+        android.graphics.drawable.GradientDrawable circle = new android.graphics.drawable.GradientDrawable();
+        circle.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        circle.setColor(0xFF7C3AED);
+        profileBtn.setBackground(circle);
+        profileBtn.setOnClickListener(v -> startActivity(new Intent(this, ProfileActivity.class)));
+        topBar.addView(profileBtn);
+
+        root.addView(topBar);
 
         TextView subtitle = new TextView(this);
         subtitle.setText("Kisisel Bilgi Sistemi");
