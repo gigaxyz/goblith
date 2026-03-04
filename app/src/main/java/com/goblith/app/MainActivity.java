@@ -163,7 +163,8 @@ public class MainActivity extends AppCompatActivity {
         setContentView(root);
         // Boş/geçersiz kayıtları temizle
         try {
-            db.delete("library", "pdf_uri IS NULL OR pdf_uri=''", null);
+            db.delete("library", "pdf_uri IS NULL OR pdf_uri='' OR custom_name IS NULL OR custom_name=''", null);
+            db.delete("library", "last_page=0 AND last_opened IS NULL", null);
         } catch (Exception ignored) {}
         loadLibrary();
 
@@ -391,7 +392,8 @@ public class MainActivity extends AppCompatActivity {
                     db.update("library", val, "pdf_uri=?", new String[]{fUri});
                     // Boş/geçersiz kayıtları temizle
         try {
-            db.delete("library", "pdf_uri IS NULL OR pdf_uri=''", null);
+            db.delete("library", "pdf_uri IS NULL OR pdf_uri='' OR custom_name IS NULL OR custom_name=''", null);
+            db.delete("library", "last_page=0 AND last_opened IS NULL", null);
         } catch (Exception ignored) {}
         loadLibrary();
                 });
@@ -550,7 +552,8 @@ public class MainActivity extends AppCompatActivity {
         }
         // Boş/geçersiz kayıtları temizle
         try {
-            db.delete("library", "pdf_uri IS NULL OR pdf_uri=''", null);
+            db.delete("library", "pdf_uri IS NULL OR pdf_uri='' OR custom_name IS NULL OR custom_name=''", null);
+            db.delete("library", "last_page=0 AND last_opened IS NULL", null);
         } catch (Exception ignored) {}
         loadLibrary();
     }
