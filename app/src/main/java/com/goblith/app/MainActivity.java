@@ -50,7 +50,13 @@ public class MainActivity extends android.app.Activity {
             android.os.Process.killProcess(android.os.Process.myPid());
         });
         try {
+            try {
             db = GoblithApp.getDb();
+            if (db == null) throw new Exception("DB null");
+        } catch (Exception e) {
+            Toast.makeText(this, "DB HATA: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            return;
+        }
             if (db == null) throw new Exception("DB null");
         } catch (Exception e) {
             Toast.makeText(this, "DB HATA: " + e.getMessage(), Toast.LENGTH_LONG).show();
