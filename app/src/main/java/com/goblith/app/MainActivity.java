@@ -49,7 +49,13 @@ public class MainActivity extends android.app.Activity {
                 android.util.Log.getStackTraceString(ex)).apply();
             android.os.Process.killProcess(android.os.Process.myPid());
         });
-        db = GoblithApp.getDb();
+        try {
+            db = GoblithApp.getDb();
+            if (db == null) throw new Exception("DB null");
+        } catch (Exception e) {
+            Toast.makeText(this, "DB HATA: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            return;
+        }
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
