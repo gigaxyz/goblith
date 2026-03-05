@@ -50,17 +50,11 @@ public class MainActivity extends android.app.Activity {
             android.os.Process.killProcess(android.os.Process.myPid());
         });
         try {
-            try {
             db = new android.database.sqlite.SQLiteOpenHelper(this, "goblith.db", null, 9) {
                 @Override public void onCreate(android.database.sqlite.SQLiteDatabase d) { GoblithApp.DBManager.createTables(d); }
                 @Override public void onUpgrade(android.database.sqlite.SQLiteDatabase d, int o, int n) { GoblithApp.DBManager.createTables(d); }
+                @Override public void onOpen(android.database.sqlite.SQLiteDatabase d) { super.onOpen(d); try { d.execSQL("PRAGMA journal_mode=WAL"); } catch(Exception ignored){} }
             }.getWritableDatabase();
-            if (db == null) throw new Exception("DB null");
-        } catch (Exception e) {
-            Toast.makeText(this, "DB HATA: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            return;
-        }
-            if (db == null) throw new Exception("DB null");
         } catch (Exception e) {
             Toast.makeText(this, "DB HATA: " + e.getMessage(), Toast.LENGTH_LONG).show();
             return;
