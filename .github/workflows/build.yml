@@ -3,6 +3,7 @@ name: Build Goblith APK
 on:
   push:
     branches: [ master ]
+  workflow_dispatch:
 
 jobs:
   build:
