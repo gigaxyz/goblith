@@ -13,6 +13,25 @@ public class GoblithApp extends Application {
     public void onCreate() {
         super.onCreate();
         instance = this;
+        // Crashlytics başlat
+        try {
+            com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(true);
+        } catch (Exception ignored) {}
+        // Tüm crash'leri yakala
+        Thread.setDefaultUncaughtExceptionHandler((thread, ex) -> {
+            try {
+                com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().recordException(ex);
+            } catch (Exception ignored) {}
+            android.util.Log.e("GOBLITH_CRASH", "CRASH", ex);
+            // Crash'i SharedPreferences'a kaydet
+            try {
+                getSharedPreferences("crash", android.content.Context.MODE_PRIVATE)
+                    .edit()
+                    .putString("last_crash", ex.toString() + "\n" + android.util.Log.getStackTraceString(ex))
+                    .apply();
+            } catch (Exception ignored) {}
+            android.os.Process.killProcess(android.os.Process.myPid());
+        });
         // DB'yi uygulama başlangıcında bir kez aç
         try {
             DBManager helper = new DBManager(this);
