@@ -31,7 +31,10 @@ public class ProfileActivity extends Activity {
         user = FirebaseAuth.getInstance().getCurrentUser();
         db = FirebaseFirestore.getInstance();
 
-        try { localDb = GoblithApp.getDb(); }
+        try { localDb = new android.database.sqlite.SQLiteOpenHelper(this, "goblith.db", null, 9) {
+                @Override public void onCreate(android.database.sqlite.SQLiteDatabase d) { GoblithApp.DBManager.createTables(d); }
+                @Override public void onUpgrade(android.database.sqlite.SQLiteDatabase d, int o, int n) { GoblithApp.DBManager.createTables(d); }
+            }.getWritableDatabase(); }
         catch (Exception e) { localDb = null; }
 
         int bgColor = prefs.getInt("bg_color", 0xFF0F0E17);

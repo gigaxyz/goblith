@@ -280,7 +280,10 @@ public class PdfViewerActivity extends android.app.Activity {
             finish();
         });
         try {
-            db = GoblithApp.getDb();
+            db = new android.database.sqlite.SQLiteOpenHelper(this, "goblith.db", null, 9) {
+                @Override public void onCreate(android.database.sqlite.SQLiteDatabase d) { GoblithApp.DBManager.createTables(d); }
+                @Override public void onUpgrade(android.database.sqlite.SQLiteDatabase d, int o, int n) { GoblithApp.DBManager.createTables(d); }
+            }.getWritableDatabase();
         } catch (Exception e) {
             Toast.makeText(this,"DB hatası: "+e.getMessage(),Toast.LENGTH_LONG).show();
             finish(); return;

@@ -29,7 +29,10 @@ public class ArchiveActivity extends android.app.Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         try {
-            db = GoblithApp.getDb();
+            db = new android.database.sqlite.SQLiteOpenHelper(this, "goblith.db", null, 9) {
+                @Override public void onCreate(android.database.sqlite.SQLiteDatabase d) { GoblithApp.DBManager.createTables(d); }
+                @Override public void onUpgrade(android.database.sqlite.SQLiteDatabase d, int o, int n) { GoblithApp.DBManager.createTables(d); }
+            }.getWritableDatabase();
         } catch (Exception e) {
             Toast.makeText(this, "DB hatasi: " + e.getMessage(), Toast.LENGTH_LONG).show();
             finish(); return;
