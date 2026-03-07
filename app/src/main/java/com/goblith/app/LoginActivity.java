@@ -26,6 +26,20 @@ public class LoginActivity extends Activity {
         super.onCreate(savedInstanceState);
         mAuth = FirebaseAuth.getInstance();
 
+        // Crash log göster
+        try {
+            android.content.SharedPreferences crashPrefs = getSharedPreferences("crash", MODE_PRIVATE);
+            String lastCrash = crashPrefs.getString("last_crash", null);
+            if (lastCrash != null) {
+                new android.app.AlertDialog.Builder(this)
+                    .setTitle("Son Hata")
+                    .setMessage(lastCrash.substring(0, Math.min(lastCrash.length(), 800)))
+                    .setPositiveButton("Temizle", (d, w) -> crashPrefs.edit().remove("last_crash").apply())
+                    .setNegativeButton("Kapat", null)
+                    .show();
+            }
+        } catch (Exception ignored) {}
+
         // Gerçek Google girişi yapılmışsa direkt geç
         FirebaseUser user = mAuth.getCurrentUser();
         if (user != null && !user.isAnonymous()) {
