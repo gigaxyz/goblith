@@ -519,9 +519,17 @@ public class ProfileActivity extends Activity {
             .setTitle("Tema Seç")
             .setSingleChoiceItems(themes, sel, (d,w) -> s[0]=w)
             .setPositiveButton("Uygula", (d,w) -> {
-                prefs.edit().putString("theme",keys[s[0]]).putInt("accent_color",accents[s[0]]).putInt("bg_color",bgs[s[0]]).apply();
-                Toast.makeText(this,"Tema değişti, uygulamayı yeniden açın",Toast.LENGTH_LONG).show();
-                finish();
+                prefs.edit()
+                    .putString("theme", keys[s[0]])
+                    .putInt("accent_color", accents[s[0]])
+                    .putInt("bg_color", bgs[s[0]])
+                    .apply();
+                Toast.makeText(this, "✓ Tema uygulandı", Toast.LENGTH_SHORT).show();
+                // Tüm uygulamayı yeniden başlat
+                Intent restart = new Intent(this, MainActivity.class);
+                restart.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                startActivity(restart);
+                finishAffinity();
             })
             .setNegativeButton("İptal",null).show();
     }

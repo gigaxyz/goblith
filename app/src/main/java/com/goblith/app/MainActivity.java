@@ -56,9 +56,14 @@ public class MainActivity extends android.app.Activity {
             return;
         }
 
+        android.content.SharedPreferences themePrefs = getSharedPreferences("settings", MODE_PRIVATE);
+        int BG_COLOR = themePrefs.getInt("bg_color", 0xFF0F0E17);
+        int ACCENT_COLOR = themePrefs.getInt("accent_color", 0xFF7C3AED);
+        int CARD_COLOR = adjustColor(BG_COLOR, 15);
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(0xFF0F0E17);
+        root.setBackgroundColor(BG_COLOR);
 
         // Kullanıcı bilgisi — try/catch ile güvenli
         try {
@@ -82,7 +87,7 @@ public class MainActivity extends android.app.Activity {
 
         TextView title = new TextView(this);
         title.setText("Goblith");
-        title.setTextColor(0xFF6D28D9);
+        title.setTextColor(ACCENT_COLOR);
         title.setTextSize(36);
         title.setTypeface(null, Typeface.BOLD);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
@@ -124,7 +129,7 @@ public class MainActivity extends android.app.Activity {
         root.addView(subtitle);
 
         // Butonlar — referansları saklıyoruz
-        Button btnAdd    = makeBtn("+ DOSYA EKLE",  R.drawable.ic_add,      0xFF7C3AED);
+        Button btnAdd    = makeBtn("+ DOSYA EKLE",  R.drawable.ic_add,      ACCENT_COLOR);
         Button btnNotes  = makeBtn("ALINTI BANKASI", R.drawable.ic_notes,    0xFF2D2B55);
         Button btnWords  = makeBtn("KELIME ANALIZI", R.drawable.ic_words,    0xFF2D2B55);
         Button btnStats  = makeBtn("ISTATISTIKLER",  R.drawable.ic_stats,    0xFF2D2B55);
@@ -132,7 +137,7 @@ public class MainActivity extends android.app.Activity {
         Button btnFlash  = makeBtn("FLASHCARD",      R.drawable.ic_flash,    0xFF2D2B55);
         Button btnList   = makeBtn("OKUMA LISTESI",  R.drawable.ic_list,     0xFF2D2B55);
         Button btnBmarks = makeBtn("YER IMLERI",     R.drawable.ic_bookmark, 0xFF2D2B55);
-        Button btnArchiveMain = makeBtn("ARSIV",          R.drawable.ic_archive,  0xFF7C3AED);
+        Button btnArchiveMain = makeBtn("ARSIV",          R.drawable.ic_archive,  ACCENT_COLOR);
         Button btnSearch     = makeBtn("PDF ARAMA",      R.drawable.ic_search,   0xFF2D2B55);
 
         // DOSYA EKLE — tam genişlik, vurgulu
@@ -188,6 +193,13 @@ public class MainActivity extends android.app.Activity {
         btnList.setOnClickListener(v   -> startActivity(new Intent(this, ReadingListActivity.class)));
         btnBmarks.setOnClickListener(v -> showAllBookmarks());
 
+    }
+
+    private int adjustColor(int color, int amount) {
+        int r = Math.min(255, ((color >> 16) & 0xFF) + amount);
+        int g = Math.min(255, ((color >> 8) & 0xFF) + amount);
+        int b = Math.min(255, (color & 0xFF) + amount);
+        return (0xFF << 24) | (r << 16) | (g << 8) | b;
     }
 
     private LinearLayout makeRow(Button b1, Button b2) {
