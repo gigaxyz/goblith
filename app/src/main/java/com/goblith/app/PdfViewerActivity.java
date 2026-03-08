@@ -1153,7 +1153,7 @@ public class PdfViewerActivity extends android.app.Activity {
                                 if (box == null) continue;
                                 if (!first) blocksJson.append(",");
                                 first = false;
-                                blocksJson.append("{")
+                                blocksJson.append("{").append("\"t\":\"").append(block.getText().replace("\"", "'").replace("\n", " ")).append("\",").append("\"x\":").append((float)box.left/bw).append(",").append("\"y\":").append((float)box.top/bh).append(",").append("\"w\":").append((float)box.width()/bw).append(",").append("\"h\":").append((float)box.height()/bh).append("}");
                                     .append(""t":"").append(block.getText().replace(""","'").replace("
 "," ")).append("",")
                                     .append(""x":").append((float)box.left/bw).append(",")
@@ -1201,7 +1201,7 @@ public class PdfViewerActivity extends android.app.Activity {
                 cur.close();
 
                 if (results.isEmpty()) {
-                    runOnUiThread(() -> { pd.dismiss(); Toast.makeText(this, """ + fQuery + "" bulunamadı", Toast.LENGTH_LONG).show(); });
+                    runOnUiThread(() -> { pd.dismiss(); Toast.makeText(this, "\"" + fQuery + "\" bulunamadi", Toast.LENGTH_LONG).show(); });
                     return;
                 }
 
