@@ -1244,61 +1244,32 @@ public class PdfViewerActivity extends android.app.Activity {
         }).start();
     }
 
-    // PdfBox ile metin katmanı arama — koordinatlı
+    // OCR cache üzerinden metin katmanı benzeri arama
     private java.util.List<WordLocation> searchInTextLayer(String normQuery, java.util.List<String> validWords, android.app.ProgressDialog pd) {
         java.util.List<WordLocation> results = new java.util.ArrayList<>();
         try {
-            com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(getApplicationContext());
-            android.os.ParcelFileDescriptor pfd = getContentResolver()
-                .openFileDescriptor(android.net.Uri.parse(pdfUri), "r");
-            if (pfd == null) return results;
-
-            java.io.FileInputStream fis = new java.io.FileInputStream(pfd.getFileDescriptor());
-            com.tom_roush.pdfbox.pdmodel.PDDocument doc = com.tom_roush.pdfbox.pdmodel.PDDocument.load(fis);
-            int pageCount = doc.getNumberOfPages();
-
-            for (int p = 0; p < pageCount; p++) {
-                final int prog = (int)((p + 1.0) / pageCount * 60) + 10;
-                runOnUiThread(() -> pd.setProgress(prog));
-
-                com.tom_roush.pdfbox.pdmodel.PDPage page = doc.getPage(p);
-                float pageW = page.getMediaBox().getWidth();
-                float pageH = page.getMediaBox().getHeight();
-
-                com.tom_roush.pdfbox.text.PDFTextStripperByArea stripper =
-                    new com.tom_roush.pdfbox.text.PDFTextStripperByArea();
-                stripper.setSortByPosition(true);
-
-                com.tom_roush.pdfbox.text.PDFTextStripper ts = new com.tom_roush.pdfbox.text.PDFTextStripper();
-                ts.setStartPage(p + 1);
-                ts.setEndPage(p + 1);
-                String pageText = ts.getText(doc);
-                String normPageText = turkishNormalize(pageText);
-
-                // Tam cümle eşleşmesi
-                if (normPageText.contains(normQuery)) {
-                    // Koordinat bulmak için pozisyon hesapla
-                    float approxY = estimateTextPosition(normPageText, normQuery, pageH);
-                    results.add(new WordLocation(p, 0.05f, approxY, 0.9f, 0.05f, fQuery, 1.0));
-                    continue;
-                }
-
-                // Kelime kelime eşleşme
-                int score = calcScore(validWords, normQuery, normPageText);
-                if (score > 500) { // yüksek güven eşiği
-                    float approxY = estimateTextPosition(normPageText, validWords.get(0), pageH);
-                    results.add(new WordLocation(p, 0.05f, approxY, 0.9f, 0.04f, normQuery, score / 10000.0));
+            // Cache'de yüksek skorlu tam eşleşme ara
+            android.database.Cursor cur = db.rawQuery(
+                "SELECT page, ocr_text, blocks FROM pdf_ocr_cache WHERE pdf_uri=? ORDER BY page ASC",
+                new String[]{pdfUri});
+            while (cur.moveToNext()) {
+                int pageNum = cur.getInt(0);
+                String ocrText = turkishNormalize(cur.getString(1));
+                String blocksJson = cur.getString(2);
+                // Sadece tam cümle veya çok yüksek skor
+                if (ocrText.contains(normQuery)) {
+                    float[] coords = findBestBlock(blocksJson, validWords.toArray(new String[0]));
+                    float x = coords != null ? coords[0] : 0.05f;
+                    float y = coords != null ? coords[1] : estimateTextPosition(ocrText, normQuery, 1.0f);
+                    float w = coords != null ? coords[2] : 0.9f;
+                    float h = coords != null ? coords[3] : 0.05f;
+                    results.add(new WordLocation(pageNum, x, y, w, h, normQuery, 1.0));
                 }
             }
-            doc.close();
-            fis.close();
-            pfd.close();
-
-            // Skora göre sırala
+            cur.close();
             results.sort((a, b2) -> Double.compare(b2.score, a.score));
-
         } catch (Exception e) {
-            android.util.Log.d("PdfSearch", "TextLayer yok veya hata: " + e.getMessage());
+            android.util.Log.d("PdfSearch", "textLayer hata: " + e.getMessage());
         }
         return results;
     }
