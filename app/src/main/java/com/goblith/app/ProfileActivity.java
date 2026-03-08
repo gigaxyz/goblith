@@ -210,8 +210,18 @@ public class ProfileActivity extends Activity {
         // Hesap
         root.addView(makeSectionTitle("HESAP"));
         if (user != null && !user.isAnonymous()) {
-            root.addView(makeRow("🔄 Verileri Senkronize Et", () ->
-                Toast.makeText(this, "Yakında aktif olacak", Toast.LENGTH_SHORT).show()));
+            root.addView(makeRow("🔄 Verileri Senkronize Et", () -> {
+                Toast.makeText(this, "Senkronizasyon başlatıldı...", Toast.LENGTH_SHORT).show();
+                new Thread(() -> {
+                    try {
+                        SyncManager sync = new SyncManager(this, GoblithApp.getDb());
+                        sync.syncAll();
+                        runOnUiThread(() -> Toast.makeText(this, "✓ Senkronizasyon tamamlandı", Toast.LENGTH_SHORT).show());
+                    } catch (Exception e) {
+                        runOnUiThread(() -> Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                    }
+                }).start();
+            }));
         } else {
             root.addView(makeRow("🔐 Google ile Giriş Yap", () -> {
                 FirebaseAuth.getInstance().signOut();
@@ -432,11 +442,68 @@ public class ProfileActivity extends Activity {
     }
 
     private void showSettingsMenu() {
+        boolean autoSync = prefs.getBoolean("auto_sync", true);
+        String syncStatus = autoSync ? "🔄 Otomatik Sync: AÇIK" : "🔄 Otomatik Sync: KAPALI";
         new android.app.AlertDialog.Builder(this)
             .setTitle("Ayarlar")
-            .setItems(new String[]{"🎨 Tema Seç", "🔒 Gizlilik", "🔔 Bildirimler"},
-                (d, w) -> { if (w==0) showThemeDialog(); else if (w==1) showPrivacyDialog(); else showNotifDialog(); })
+            .setItems(new String[]{"🎨 Tema Seç", "🔒 Gizlilik", "🔔 Bildirimler", syncStatus},
+                (d, w) -> {
+                    if (w==0) showThemeDialog();
+                    else if (w==1) showPrivacyDialog();
+                    else if (w==2) showNotifDialog();
+                    else showAutoSyncDialog();
+                })
             .show();
+    }
+
+    private void showAutoSyncDialog() {
+        boolean cur = prefs.getBoolean("auto_sync", true);
+        String[] options = {"⏱ Her 5 dakikada", "⏱ Her 15 dakikada", "⏱ Her 30 dakikada", "⏱ Her saat", "🚫 Kapalı"};
+        int[] intervals = {5, 15, 30, 60, -1};
+        int curInterval = prefs.getInt("sync_interval", 15);
+        int sel = 1;
+        for (int i = 0; i < intervals.length; i++) if (intervals[i] == curInterval) sel = i;
+        final int[] s = {sel};
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Otomatik Senkronizasyon")
+            .setSingleChoiceItems(options, sel, (d, w) -> s[0] = w)
+            .setPositiveButton("Kaydet", (d, w) -> {
+                boolean enabled = intervals[s[0]] != -1;
+                prefs.edit()
+                    .putBoolean("auto_sync", enabled)
+                    .putInt("sync_interval", intervals[s[0]])
+                    .apply();
+                if (enabled) {
+                    scheduleAutoSync(intervals[s[0]]);
+                    Toast.makeText(this, "✓ Otomatik sync her " + intervals[s[0]] + " dakikada çalışacak", Toast.LENGTH_SHORT).show();
+                } else {
+                    cancelAutoSync();
+                    Toast.makeText(this, "Otomatik sync kapatıldı", Toast.LENGTH_SHORT).show();
+                }
+            })
+            .setNegativeButton("İptal", null).show();
+    }
+
+    private void scheduleAutoSync(int intervalMinutes) {
+        try {
+            android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+            android.content.Intent i = new android.content.Intent("com.goblith.app.AUTO_SYNC");
+            android.app.PendingIntent pi = android.app.PendingIntent.getBroadcast(this, 0, i,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
+            long interval = intervalMinutes * 60 * 1000L;
+            am.setRepeating(android.app.AlarmManager.RTC_WAKEUP,
+                System.currentTimeMillis() + interval, interval, pi);
+        } catch (Exception ignored) {}
+    }
+
+    private void cancelAutoSync() {
+        try {
+            android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+            android.content.Intent i = new android.content.Intent("com.goblith.app.AUTO_SYNC");
+            android.app.PendingIntent pi = android.app.PendingIntent.getBroadcast(this, 0, i,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
+            am.cancel(pi);
+        } catch (Exception ignored) {}
     }
 
     private void showThemeDialog() {
@@ -474,16 +541,49 @@ public class ProfileActivity extends Activity {
     }
 
     private void showNotifDialog() {
-        String[] options = {"📖 Okuma hatırlatıcısı","💬 Topluluk bildirimleri"};
-        boolean[] checked = {prefs.getBoolean("notif_reading",true), prefs.getBoolean("notif_community",true)};
+        String[] options = {"📖 Günlük okuma hatırlatıcısı", "💬 Topluluk bildirimleri"};
+        boolean[] checked = {prefs.getBoolean("notif_reading", true), prefs.getBoolean("notif_community", true)};
         new android.app.AlertDialog.Builder(this)
             .setTitle("Bildirim Ayarları")
-            .setMultiChoiceItems(options,checked,(d,w,c)->checked[w]=c)
-            .setPositiveButton("Kaydet",(d,w)->{
-                prefs.edit().putBoolean("notif_reading",checked[0]).putBoolean("notif_community",checked[1]).apply();
-                Toast.makeText(this,"Bildirim ayarları kaydedildi",Toast.LENGTH_SHORT).show();
+            .setMultiChoiceItems(options, checked, (d, w, c) -> checked[w] = c)
+            .setPositiveButton("Kaydet", (d, w) -> {
+                prefs.edit()
+                    .putBoolean("notif_reading", checked[0])
+                    .putBoolean("notif_community", checked[1])
+                    .apply();
+                if (checked[0]) scheduleReadingReminder();
+                else cancelReadingReminder();
+                Toast.makeText(this, "✓ Bildirim ayarları kaydedildi", Toast.LENGTH_SHORT).show();
             })
-            .setNegativeButton("İptal",null).show();
+            .setNegativeButton("İptal", null).show();
+    }
+
+    private void scheduleReadingReminder() {
+        try {
+            android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+            android.content.Intent i = new android.content.Intent("com.goblith.app.READING_REMINDER");
+            android.app.PendingIntent pi = android.app.PendingIntent.getBroadcast(this, 1, i,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
+            // Her gün akşam 20:00'de hatırlat
+            java.util.Calendar cal = java.util.Calendar.getInstance();
+            cal.set(java.util.Calendar.HOUR_OF_DAY, 20);
+            cal.set(java.util.Calendar.MINUTE, 0);
+            cal.set(java.util.Calendar.SECOND, 0);
+            if (cal.getTimeInMillis() < System.currentTimeMillis())
+                cal.add(java.util.Calendar.DAY_OF_YEAR, 1);
+            am.setRepeating(android.app.AlarmManager.RTC_WAKEUP,
+                cal.getTimeInMillis(), android.app.AlarmManager.INTERVAL_DAY, pi);
+        } catch (Exception ignored) {}
+    }
+
+    private void cancelReadingReminder() {
+        try {
+            android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+            android.content.Intent i = new android.content.Intent("com.goblith.app.READING_REMINDER");
+            android.app.PendingIntent pi = android.app.PendingIntent.getBroadcast(this, 1, i,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
+            am.cancel(pi);
+        } catch (Exception ignored) {}
     }
 
     private void deleteAccount() {

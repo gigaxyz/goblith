@@ -57,5 +57,16 @@
         <activity android:name=".ProfileActivity"
             android:exported="false"
             android:theme="@style/AppTheme"/>
+    
+        <receiver android:name=".SyncReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="com.goblith.app.AUTO_SYNC"/>
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".ReminderReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="com.goblith.app.READING_REMINDER"/>
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>
