@@ -29,10 +29,7 @@ public class ArchiveActivity extends android.app.Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         try {
-            db = new android.database.sqlite.SQLiteOpenHelper(this, "goblith.db", null, 9) {
-                @Override public void onCreate(android.database.sqlite.SQLiteDatabase d) { GoblithApp.DBManager.createTables(d); }
-                @Override public void onUpgrade(android.database.sqlite.SQLiteDatabase d, int o, int n) { GoblithApp.DBManager.createTables(d); }
-            }.getWritableDatabase();
+            db = GoblithApp.getDb();
         } catch (Exception e) {
             Toast.makeText(this, "DB hatasi: " + e.getMessage(), Toast.LENGTH_LONG).show();
             finish(); return;
@@ -286,15 +283,5 @@ public class ArchiveActivity extends android.app.Activity {
         lp.setMargins(lm, 0, 0, 0);
         b.setLayoutParams(lp);
         return b;
-    }
-
-    class DBHelper extends SQLiteOpenHelper {
-        DBHelper() { super(ArchiveActivity.this, "goblith.db", null, 8); }
-        @Override public void onCreate(SQLiteDatabase db) {
-            db.execSQL("CREATE TABLE IF NOT EXISTS archive (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, book_name TEXT, page INTEGER, quote TEXT, topic TEXT, importance INTEGER DEFAULT 2, created_at TEXT)");
-        }
-        @Override public void onUpgrade(SQLiteDatabase db, int o, int n) {
-            try { db.execSQL("CREATE TABLE IF NOT EXISTS archive (id INTEGER PRIMARY KEY AUTOINCREMENT, pdf_uri TEXT, book_name TEXT, page INTEGER, quote TEXT, topic TEXT, importance INTEGER DEFAULT 2, created_at TEXT)"); } catch (Exception e) {}
-        }
     }
 }

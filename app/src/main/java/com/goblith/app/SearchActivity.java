@@ -34,10 +34,7 @@ public class SearchActivity extends android.app.Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        db = new android.database.sqlite.SQLiteOpenHelper(this, "goblith.db", null, 9) {
-                @Override public void onCreate(android.database.sqlite.SQLiteDatabase d) { GoblithApp.DBManager.createTables(d); }
-                @Override public void onUpgrade(android.database.sqlite.SQLiteDatabase d, int o, int n) { GoblithApp.DBManager.createTables(d); }
-            }.getWritableDatabase();
+        db = GoblithApp.getDb();
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -292,11 +289,5 @@ public class SearchActivity extends android.app.Activity {
             i.putExtra("fileType", "PDF");
             startActivity(i);
         });
-    }
-
-    class DBHelper extends SQLiteOpenHelper {
-        DBHelper() { super(SearchActivity.this, "goblith.db", null, 8); }
-        @Override public void onCreate(SQLiteDatabase db) {}
-        @Override public void onUpgrade(SQLiteDatabase db, int o, int n) {}
     }
 }
