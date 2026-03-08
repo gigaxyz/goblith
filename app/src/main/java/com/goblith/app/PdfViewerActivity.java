@@ -1087,17 +1087,39 @@ public class PdfViewerActivity extends android.app.Activity {
                         runOnUiThread(() -> pd.setProgress(prog));
 
                         android.graphics.pdf.PdfRenderer.Page pg = renderer.openPage(p);
-                        int bw = pg.getWidth() * 3, bh = pg.getHeight() * 3;
+                        // 4x çözünürlük — OCR doğruluğunu ciddi artırır
+                        int bw = pg.getWidth() * 4, bh = pg.getHeight() * 4;
                         android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
-                        android.graphics.Canvas cv = new android.graphics.Canvas(bmp);
-                        cv.drawColor(android.graphics.Color.WHITE);
-                        pg.render(bmp, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
+                        android.graphics.Canvas cvs = new android.graphics.Canvas(bmp);
+                        cvs.drawColor(android.graphics.Color.WHITE);
+                        android.graphics.Matrix m = new android.graphics.Matrix();
+                        m.setScale(4, 4);
+                        pg.render(bmp, null, m, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
                         pg.close();
                         try {
                             com.google.mlkit.vision.text.Text vt = com.google.android.gms.tasks.Tasks.await(
                                 recognizer.process(InputImage.fromBitmap(bmp, 0)));
-                            savePageOcr(p, vt.getText());
-                        } catch (Exception ignored) { savePageOcr(p, ""); }
+                            String pageOcr = vt.getText();
+                            // Blok koordinatlarını JSON olarak kaydet
+                            StringBuilder blocksJson = new StringBuilder("[");
+                            boolean firstBlock = true;
+                            for (com.google.mlkit.vision.text.Text.TextBlock block : vt.getTextBlocks()) {
+                                android.graphics.Rect box = block.getBoundingBox();
+                                if (box == null) continue;
+                                if (!firstBlock) blocksJson.append(",");
+                                firstBlock = false;
+                                blocksJson.append("{")
+                                    .append(""t":"").append(block.getText().replace(""","'").replace("
+"," ")).append("",")
+                                    .append(""x":").append((float)box.left/bw).append(",")
+                                    .append(""y":").append((float)box.top/bh).append(",")
+                                    .append(""w":").append((float)box.width()/bw).append(",")
+                                    .append(""h":").append((float)box.height()/bh)
+                                    .append("}");
+                            }
+                            blocksJson.append("]");
+                            savePageOcrWithBlocks(p, pageOcr, blocksJson.toString());
+                        } catch (Exception ignored) { savePageOcrWithBlocks(p, "", "[]"); }
                         bmp.recycle();
                     }
                     recognizer.close();
@@ -1275,15 +1297,15 @@ public class PdfViewerActivity extends android.app.Activity {
             if (qw.length() < 2) continue;
             validWords++;
             double bestWordScore = 0;
+            String qwStem = turkishStem(qw);
             for (String bw : blockWords) {
                 if (bw.length() < 2) continue;
-                String qwStem = turkishStem(qw);
                 String bwStem = turkishStem(bw);
-                // Kök eşleşmesi
-                double sim = wordSimilarity(qwStem, bwStem);
-                // Ek tolerans — OCR sıklıkla ü→u, ş→s gibi hata yapar
-                if (sim < 0.7) sim = Math.max(sim, wordSimilarity(qw, bw));
+                // Kök eşleşmesi + kombinasyon benzerliği
+                double sim = combinedSimilarity(qwStem, bwStem);
+                if (sim < 0.75) sim = Math.max(sim, combinedSimilarity(qw, bw));
                 bestWordScore = Math.max(bestWordScore, sim);
+                if (bestWordScore >= 0.95) break; // yeterince iyi, devam etme
             }
             totalScore += bestWordScore;
         }
@@ -1496,7 +1518,23 @@ public class PdfViewerActivity extends android.app.Activity {
                 }
             }
 
-            // 4e. Öğrenme geçmişi
+            // 4e. Trigram fuzzy eşleşme — OCR hatalarını tolere eder
+            if (!found) {
+                double bestSim = 0;
+                for (String pw : pageWords) {
+                    if (pw.length() < 3) continue;
+                    double sim = combinedSimilarity(turkishStem(word), turkishStem(pw));
+                    bestSim = Math.max(bestSim, sim);
+                    if (bestSim >= 0.85) break;
+                }
+                if (bestSim >= 0.80) {
+                    score += 30 * bestSim;
+                    matchedWords++;
+                    found = true;
+                }
+            }
+
+            // 4f. Öğrenme geçmişi
             if (!found) {
                 try {
                     android.database.Cursor lc = db.rawQuery(
@@ -1512,7 +1550,9 @@ public class PdfViewerActivity extends android.app.Activity {
         // Çok kelimeli aramada en az %50, tek kelimede mutlaka eşleşme
         if (words.size() > 1) {
             double ratio = (double) matchedWords / words.size();
-            if (ratio < 0.5) return 0;
+            // 2 kelimede en az 1, 3+ kelimede %40
+            int minMatch = words.size() == 2 ? 1 : (int)Math.ceil(words.size() * 0.4);
+            if (matchedWords < minMatch) return 0;
         } else {
             if (matchedWords == 0) return 0;
         }
@@ -1563,11 +1603,16 @@ public class PdfViewerActivity extends android.app.Activity {
     }
 
     private void savePageOcr(int page, String text) {
+        savePageOcrWithBlocks(page, text, "[]");
+    }
+
+    private void savePageOcrWithBlocks(int page, String text, String blocks) {
         try {
             android.content.ContentValues cv = new android.content.ContentValues();
             cv.put("pdf_uri", pdfUri);
             cv.put("page", page);
             cv.put("ocr_text", text);
+            cv.put("blocks", blocks);
             db.insertWithOnConflict("pdf_ocr_cache", null, cv, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE);
         } catch (Exception ignored) {}
     }
@@ -1587,6 +1632,34 @@ public class PdfViewerActivity extends android.app.Activity {
     }
 
     private String normalizeText(String text) { return turkishNormalize(text); }
+    // Karakter trigram seti üret — fuzzy matching için
+    private java.util.Set<String> charTrigrams(String word) {
+        java.util.Set<String> trigrams = new java.util.HashSet<>();
+        String padded = "#" + word + "#";
+        for (int i = 0; i < padded.length() - 2; i++) {
+            trigrams.add(padded.substring(i, i + 3));
+        }
+        return trigrams;
+    }
+
+    // Trigram benzerliği — Levenshtein'dan daha hızlı ve OCR hatalarına dayanıklı
+    private double trigramSimilarity(String a, String b) {
+        if (a.equals(b)) return 1.0;
+        if (a.isEmpty() || b.isEmpty()) return 0.0;
+        java.util.Set<String> ta = charTrigrams(a);
+        java.util.Set<String> tb = charTrigrams(b);
+        java.util.Set<String> intersection = new java.util.HashSet<>(ta);
+        intersection.retainAll(tb);
+        return (2.0 * intersection.size()) / (ta.size() + tb.size());
+    }
+
+    // Kombine benzerlik — Levenshtein + Trigram ağırlıklı
+    private double combinedSimilarity(String a, String b) {
+        if (a.equals(b)) return 1.0;
+        double lev = wordSimilarity(a, b);
+        double tri = trigramSimilarity(a, b);
+        return lev * 0.4 + tri * 0.6;
+    }
 
     private double strictFuzzyScore(String[] queryWords, String pageText) {
         java.util.List<String> wl = new java.util.ArrayList<>(java.util.Arrays.asList(queryWords));
