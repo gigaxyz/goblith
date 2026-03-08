@@ -1154,13 +1154,6 @@ public class PdfViewerActivity extends android.app.Activity {
                                 if (!first) blocksJson.append(",");
                                 first = false;
                                 blocksJson.append("{").append("\"t\":\"").append(block.getText().replace("\"", "'").replace("\n", " ")).append("\",").append("\"x\":").append((float)box.left/bw).append(",").append("\"y\":").append((float)box.top/bh).append(",").append("\"w\":").append((float)box.width()/bw).append(",").append("\"h\":").append((float)box.height()/bh).append("}");
-                                    .append(""t":"").append(block.getText().replace(""","'").replace("
-"," ")).append("",")
-                                    .append(""x":").append((float)box.left/bw).append(",")
-                                    .append(""y":").append((float)box.top/bh).append(",")
-                                    .append(""w":").append((float)box.width()/bw).append(",")
-                                    .append(""h":").append((float)box.height()/bh)
-                                    .append("}");
                             }
                             blocksJson.append("]");
                             savePageOcrWithBlocks(p, vt.getText(), blocksJson.toString());
@@ -1410,11 +1403,6 @@ public class PdfViewerActivity extends android.app.Activity {
             float y2 = (float) r.bottom / bmpH;
             String text = block.getText().replace("\"", "'").replace("\n", " ");
             sb.append("{\"t\":\"").append(text)
-              .append("\",\"x1\":").append(x1)
-              .append(",\"y1\":").append(y1)
-              .append(",\"x2\":").append(x2)
-              .append(",\"y2\":").append(y2)
-              .append("}");
             first = false;
         }
         sb.append("]");
