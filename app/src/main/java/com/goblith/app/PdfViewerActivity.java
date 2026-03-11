@@ -1402,7 +1402,7 @@ public class PdfViewerActivity extends android.app.Activity {
             float x2 = (float) r.right / bmpW;
             float y2 = (float) r.bottom / bmpH;
             String text = block.getText().replace("\"", "'").replace("\n", " ");
-            sb.append("{\"t\":\"").append(text)
+            sb.append("{\"t\":\"").append(text).append("\",\"x1\":").append(x1).append(",\"y1\":").append(y1).append(",\"x2\":").append(x2).append(",\"y2\":").append(y2).append("}");
             first = false;
         }
         sb.append("]");
