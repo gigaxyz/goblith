@@ -1411,22 +1411,35 @@ public class PdfViewerActivity extends android.app.Activity {
 
     // JSON'dan koordinatlı en iyi bloğu bul — [x1,y1,x2,y2,score]
     private float[] findBestBlock(String blocksJson, String[] qWords) {
-        if (blocksJson == null || blocksJson.isEmpty()) return null;
+        if (blocksJson == null || blocksJson.isEmpty() || blocksJson.equals("[]")) return null;
         float bestScore = 0;
         float[] bestCoords = null;
-        // Basit JSON parse — her bloğu işle
-        String[] entries = blocksJson.split("\\},\\{");
+        String[] entries = blocksJson.split("\\},\s*\\{");
         for (String entry : entries) {
             try {
                 String t = extractJsonStr(entry, "t");
-                float x1 = extractJsonFloat(entry, "x1");
-                float y1 = extractJsonFloat(entry, "y1");
-                float x2 = extractJsonFloat(entry, "x2");
-                float y2 = extractJsonFloat(entry, "y2");
-                double score = blockScore(qWords, t);
+                if (t.isEmpty()) continue;
+                String normT = turkishNormalize(t);
+                // x,y,w,h formatında kaydedildi
+                float x = extractJsonFloat(entry, "x");
+                float y = extractJsonFloat(entry, "y");
+                float w = extractJsonFloat(entry, "w");
+                float h = extractJsonFloat(entry, "h");
+                // x1,y1,x2,y2 formatı da destekle (eski cache)
+                if (x == 0 && y == 0) {
+                    x = extractJsonFloat(entry, "x1");
+                    y = extractJsonFloat(entry, "y1");
+                    float x2 = extractJsonFloat(entry, "x2");
+                    float y2 = extractJsonFloat(entry, "y2");
+                    w = x2 - x;
+                    h = y2 - y;
+                }
+                if (w <= 0 || h <= 0) continue;
+                double score = blockScore(qWords, normT);
                 if (score > bestScore) {
                     bestScore = (float) score;
-                    bestCoords = new float[]{x1, y1, x2, y2, bestScore};
+                    // x2,y2 hesapla
+                    bestCoords = new float[]{x, y, x + w, y + h, bestScore};
                 }
             } catch (Exception ignored) {}
         }
@@ -1650,6 +1663,13 @@ public class PdfViewerActivity extends android.app.Activity {
         db.execSQL("CREATE TABLE IF NOT EXISTS pdf_ocr_cache (" +
             "pdf_uri TEXT, page INTEGER, ocr_text TEXT, blocks TEXT, " +
             "PRIMARY KEY(pdf_uri, page))");
+        // blocks sütunu yoksa ekle (eski versiyondan gelen DB)
+        try { db.execSQL("ALTER TABLE pdf_ocr_cache ADD COLUMN blocks TEXT"); } catch (Exception ignored) {}
+        // Koordinatsız (blocks boş/null) sayfaları yeniden tara
+        try {
+            db.execSQL("DELETE FROM pdf_ocr_cache WHERE pdf_uri=? AND (blocks IS NULL OR blocks='' OR blocks='[]')",
+                new String[]{pdfUri});
+        } catch (Exception ignored) {}
     }
 
     private int getCachedPageCount() {
@@ -1789,7 +1809,7 @@ public class PdfViewerActivity extends android.app.Activity {
 
             // Koordinat varsa tam konuma git, yoksa ortada göster
             float left, right, top, bottom;
-            if (coords != null && coords[4] > 0.5f) {
+            if (coords != null && coords.length >= 5 && coords[4] > 0.1f && coords[2] > coords[0] && coords[3] > coords[1]) {
                 // ML Kit koordinatları — normalize edilmiş (0-1)
                 float padding = 0.01f;
                 left   = (coords[0] - padding) * w;
