@@ -1130,7 +1130,7 @@ public class PdfViewerActivity extends android.app.Activity {
                     for (int p = 0; p < totalPgs; p++) {
                         if (isPageCached(p)) continue;
                         final int prog = 10 + (int)((p + 1.0) / totalPgs * 70);
-                        runOnUiThread(() -> { pd.setProgress(prog); pd.setMessage("Sayfa " + (p+1) + "/" + totalPgs); });
+                        final int fp = p; final int fTotal = totalPgs; runOnUiThread(() -> { pd.setProgress(prog); pd.setMessage("Sayfa " + (fp+1) + "/" + fTotal); });
 
                         android.graphics.pdf.PdfRenderer.Page pg = renderer.openPage(p);
                         int bw = pg.getWidth() * 4, bh = pg.getHeight() * 4;
