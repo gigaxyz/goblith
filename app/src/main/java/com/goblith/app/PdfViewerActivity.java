@@ -1044,25 +1044,44 @@ public class PdfViewerActivity extends android.app.Activity {
             try { ((android.view.ViewGroup) searchOverlay.getParent()).removeView(searchOverlay); }
             catch (Exception ignored) {}
         }
-        // normCoords: [x1_norm, y1_norm, x2_norm, y2_norm, score] — 0-1 arası
-        // Bunları matrix (zoom+pan) kullanarak gerçek ekran koordinatına dönüştür
+
+        // imgWidth henüz set edilmediyse pageView'dan al
+        int iw = imgWidth > 1 ? imgWidth : pageView.getWidth();
+        int ih = imgHeight > 1 ? imgHeight : pageView.getHeight();
+
         float[] screenCoords = null;
+        // normCoords: [x1_norm, y1_norm, x2_norm, y2_norm, score] — 0-1 arası (OCR bitmap normalize)
         if (normCoords != null && normCoords.length >= 5 && normCoords[4] > 0.05f
-                && normCoords[2] > normCoords[0] && normCoords[3] > normCoords[1]) {
+                && normCoords[2] > normCoords[0] && normCoords[3] > normCoords[1]
+                && iw > 0 && ih > 0) {
+            // matrix: showPage sonrası reset edilmiş durumdayken scale=1, tx=0, ty=0
+            // zoom varsa matrix değerleri farklı olabilir — her iki durumu da destekle
             float[] mv = new float[9];
             matrix.getValues(mv);
             float scale = mv[android.graphics.Matrix.MSCALE_X];
             float tx    = mv[android.graphics.Matrix.MTRANS_X];
             float ty    = mv[android.graphics.Matrix.MTRANS_Y];
-            // normalize koordinat → bitmap piksel → ekran pikseli
-            float sx1 = normCoords[0] * imgWidth  * scale + tx;
-            float sy1 = normCoords[1] * imgHeight * scale + ty;
-            float sx2 = normCoords[2] * imgWidth  * scale + tx;
-            float sy2 = normCoords[3] * imgHeight * scale + ty;
-            float minH = 60f;
-            if (sy2 - sy1 < minH) { sy1 -= minH/4; sy2 = sy1 + minH; }
+            if (scale < 0.01f) scale = 1f; // sıfır koruma
+
+            float sx1 = normCoords[0] * iw * scale + tx;
+            float sy1 = normCoords[1] * ih * scale + ty;
+            float sx2 = normCoords[2] * iw * scale + tx;
+            float sy2 = normCoords[3] * ih * scale + ty;
+
+            // Sınır kontrolü — ekran dışına çıkmasın
+            float vw = pageView.getWidth(), vh = pageView.getHeight();
+            sx1 = Math.max(0, sx1);
+            sy1 = Math.max(0, sy1);
+            sx2 = Math.min(vw > 0 ? vw : iw, sx2);
+            sy2 = Math.min(vh > 0 ? vh : ih, sy2);
+
+            // Minimum boyut — çok küçük olmasın
+            if (sx2 - sx1 < 40) { sx1 = Math.max(0, sx1 - 20); sx2 = sx1 + Math.max(40, sx2 - sx1 + 40); }
+            if (sy2 - sy1 < 30) { float mid = (sy1+sy2)/2; sy1 = mid - 20; sy2 = mid + 20; }
+
             screenCoords = new float[]{sx1, sy1, sx2, sy2, normCoords[4]};
         }
+
         searchOverlay = new SearchOverlay(this, query, screenCoords);
         android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
@@ -1164,7 +1183,9 @@ public class PdfViewerActivity extends android.app.Activity {
                                     .append("}");
                             }
                             blocksJson.append("]");
-                            savePageOcrWithBlocks(p, vt.getText(), blocksJson.toString());
+                            // OCR metnini temizleyerek kaydet — index kalitesi artar
+                            String cleanOcrText = fixOcrErrors(vt.getText());
+                            savePageOcrWithBlocks(p, cleanOcrText, blocksJson.toString());
                         } catch (Exception ex) { savePageOcrWithBlocks(p, "", "[]"); }
                         bmp.recycle();
                     }
@@ -1215,29 +1236,49 @@ public class PdfViewerActivity extends android.app.Activity {
                             layer = 2;
                         }
 
-                        // Katman 2b: kök eşleşmesi
+                        // Katman 2b: kök + OCR varyant eşleşmesi
                         if (layer < 2) {
                             int stemMatches = 0;
                             for (String w : validWords) {
                                 String stem = turkishStem(w);
-                                if (ocrText.contains(stem) || ocrText.contains(w)) stemMatches++;
-                                else {
-                                    // Varyant dene
-                                    for (String v : generateTurkishVariants(stem)) {
-                                        if (ocrText.contains(v)) { stemMatches++; break; }
+                                if (ocrText.contains(w) || ocrText.contains(stem)) {
+                                    stemMatches++;
+                                } else {
+                                    // OCR hata varyantlarını dene — "ahlak"→"ahiak" gibi
+                                    boolean found = false;
+                                    for (String variant : generateOcrVariants(stem)) {
+                                        if (ocrText.contains(variant)) { found = true; break; }
                                     }
+                                    if (!found) {
+                                        for (String v : generateTurkishVariants(stem)) {
+                                            if (ocrText.contains(v)) { found = true; break; }
+                                        }
+                                    }
+                                    if (found) stemMatches++;
                                 }
                             }
                             if (stemMatches > 0) {
-                                score = Math.max(score, stemMatches * 3000);
+                                // Tüm kelimeler bulunduysa çok yüksek skor
+                                int s2 = stemMatches == validWords.size()
+                                    ? 20000 + stemMatches * 1000
+                                    : stemMatches * 3000;
+                                score = Math.max(score, s2);
                                 layer = 2;
                             }
                         }
 
-                        // Katman 3: BM25 + fuzzy (sadece katman 2 bulamazsa)
+                        // Katman 3: Kayan pencere fuzzy — en toleranslı
                         if (layer == 0) {
-                            int bm25 = calcScore(validWords, normQuery, ocrText);
-                            if (bm25 > 0) { score = bm25; layer = 3; }
+                            String[] pageWords2 = ocrText.split("\s+");
+                            double swScore = slidingWindowScore(validWords, pageWords2);
+                            if (swScore > 0.72) {
+                                score = (int)(swScore * 15000);
+                                layer = 3;
+                            } else {
+                                // Son çare: BM25
+                                int bm25 = calcScore(validWords, normQuery, ocrText);
+                                if (bm25 > 0) { score = bm25; layer = 3; }
+                            }
                         }
                     }
 
@@ -1454,38 +1495,73 @@ public class PdfViewerActivity extends android.app.Activity {
     // JSON'dan koordinatlı en iyi bloğu bul — [x1,y1,x2,y2,score]
     private float[] findBestBlock(String blocksJson, String[] qWords) {
         if (blocksJson == null || blocksJson.isEmpty() || blocksJson.equals("[]")) return null;
+
+        // Sorgu kelimelerini normalize et — bir kez yap
+        String[] normQWords = new String[qWords.length];
+        for (int i = 0; i < qWords.length; i++) normQWords[i] = turkishNormalize(qWords[i]);
+        String joinedQuery = String.join(" ", normQWords);
+
         float bestScore = 0;
         float[] bestCoords = null;
-        String[] entries = blocksJson.split("\\},\s*\\{");
+
+        // JSON entry'leri ayır — hem },{ hem de }, { formatını destekle
+        String[] entries = blocksJson.replaceAll("^\[|\]$", "").split("\},\s*\{");
+
         for (String entry : entries) {
             try {
                 String t = extractJsonStr(entry, "t");
-                if (t.isEmpty()) continue;
+                if (t == null || t.isEmpty()) continue;
                 String normT = turkishNormalize(t);
-                // x,y,w,h formatında kaydedildi
+
+                // x,y,w,h formatı (güncel)
                 float x = extractJsonFloat(entry, "x");
                 float y = extractJsonFloat(entry, "y");
                 float w = extractJsonFloat(entry, "w");
                 float h = extractJsonFloat(entry, "h");
-                // x1,y1,x2,y2 formatı da destekle (eski cache)
-                if (x == 0 && y == 0) {
-                    x = extractJsonFloat(entry, "x1");
-                    y = extractJsonFloat(entry, "y1");
-                    float x2 = extractJsonFloat(entry, "x2");
-                    float y2 = extractJsonFloat(entry, "y2");
-                    w = x2 - x;
-                    h = y2 - y;
+                // x1,y1,x2,y2 formatı (eski — olmamalı ama güvenlik için)
+                if (w <= 0 || h <= 0) {
+                    float x1b = extractJsonFloat(entry, "x1");
+                    float y1b = extractJsonFloat(entry, "y1");
+                    float x2b = extractJsonFloat(entry, "x2");
+                    float y2b = extractJsonFloat(entry, "y2");
+                    if (x2b > x1b && y2b > y1b) { x=x1b; y=y1b; w=x2b-x1b; h=y2b-y1b; }
                 }
                 if (w <= 0 || h <= 0) continue;
-                double score = blockScore(qWords, normT);
+
+                float score = 0;
+
+                // Skor 1: tam sorgu bu blokta var mı?
+                if (normT.contains(joinedQuery)) {
+                    score = 10000;
+                } else {
+                    // Skor 2: her sorgu kelimesi için max benzerlik
+                    float wordScore = 0;
+                    for (String qw : normQWords) {
+                        if (qw.length() < 2) continue;
+                        String qStem = turkishStem(qw);
+                        // Tam eşleşme
+                        if (normT.contains(qw)) { wordScore += 1000; continue; }
+                        // Kök eşleşmesi
+                        if (normT.contains(qStem)) { wordScore += 700; continue; }
+                        // Kelime kelime benzerlik (OCR hata toleransı)
+                        float bestWordSim = 0;
+                        for (String bw2 : normT.split("\s+")) {
+                            if (bw2.length() < 2) continue;
+                            double sim = combinedSimilarity(qStem, turkishStem(bw2));
+                            if (sim > bestWordSim) bestWordSim = (float) sim;
+                        }
+                        if (bestWordSim > 0.75f) wordScore += bestWordSim * 500;
+                    }
+                    score = wordScore;
+                }
+
                 if (score > bestScore) {
-                    bestScore = (float) score;
-                    // x2,y2 hesapla
+                    bestScore = score;
                     bestCoords = new float[]{x, y, x + w, y + h, bestScore};
                 }
             } catch (Exception ignored) {}
         }
-        return bestCoords;
+        return (bestCoords != null && bestScore > 0) ? bestCoords : null;
     }
 
     private String extractJsonStr(String json, String key) {
@@ -1507,6 +1583,107 @@ public class PdfViewerActivity extends android.app.Activity {
         try { return Float.parseFloat(json.substring(s, e)); } catch (Exception ex) { return 0; }
     }
 
+
+
+    // OCR çıktısındaki sistematik karakter hatalarını düzelt
+    // Bu metod cache'e kaydetmeden önce çağrılır — index temiz olur
+    private String fixOcrErrors(String text) {
+        if (text == null) return "";
+        // Karakter düzeyinde görsel benzerlik düzeltmeleri
+        // Büyük I (uppercase) → küçük l (lowercase L) — en yaygın hata
+        text = text.replace("I", "l")   // sadece küçük harf bağlamında
+                   .replace("0", "o")   // sıfır → o harfi
+                   .replace("1", "l")   // bir → l harfi (dikkatli)
+                   .replace("|", "l")   // pipe → l
+                   .replace("ı", "i")  // ı → i (normalize zaten yapıyor ama emin ol)
+                   .replace("â", "a")  // â → a (düzeltme işareti)
+                   .replace("î", "i")  // î → i
+                   .replace("û", "u"); // û → u
+        // Yaygın OCR kelime hataları — Türkçe'de sık görülenler
+        // "rn" → "m" sadece rakam/sembol çevresinde değil, harf bağlamında da olabilir
+        // Ama bu çok agresif — sadece bilinen kalıplarda uygula
+        // Boşluk sorunları — OCR bazen kelimeleri birleştirir
+        // Bu adımı yapmıyoruz — false positive riski çok yüksek
+        return text;
+    }
+
+    // Sorgu için OCR hata varyantları üret — query expansion
+    // "ahlak" → ["ahlak", "ahiak", "ah1ak", "ahlâk"] gibi
+    private java.util.List<String> generateOcrVariants(String word) {
+        java.util.Set<String> variants = new java.util.LinkedHashSet<>();
+        variants.add(word); // orijinal her zaman ilk
+        if (word.length() < 2) return new java.util.ArrayList<>(variants);
+
+        // Her karakteri olası OCR hata alternatifleriyle değiştir
+        char[][] confusions = {
+            {'l', 'I', '1', '|'},  // l, büyük i, bir, pipe
+            {'i', '1', 'l'},        // i, bir, l
+            {'o', '0'},             // o, sıfır
+            {'a', 'o'},             // a/o benzerliği
+            {'u', 'v'},             // u/v benzerliği
+            {'m', 'n'},             // m/n benzerliği (kısmi)
+            {'c', 'e'},             // c/e benzerliği
+        };
+
+        // Tek karakter değişimi varyantları
+        for (int pos = 0; pos < word.length(); pos++) {
+            char original = word.charAt(pos);
+            for (char[] group : confusions) {
+                boolean inGroup = false;
+                for (char c : group) if (c == original) { inGroup = true; break; }
+                if (inGroup) {
+                    for (char replacement : group) {
+                        if (replacement != original) {
+                            String variant = word.substring(0, pos) + replacement + word.substring(pos + 1);
+                            variants.add(variant);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Kök tabanlı varyantlar — ek sıyırma
+        String stem = turkishStem(word);
+        if (!stem.equals(word)) variants.add(stem);
+
+        return new java.util.ArrayList<>(variants);
+    }
+
+    // Kayan pencere fuzzy arama — çok kelimeli sorgularda çok güçlü
+    // "ahlaki degerler" gibi sorguyu OCR metninde kayan pencereyle arar
+    private double slidingWindowScore(java.util.List<String> queryWords, String[] pageWords) {
+        if (queryWords.isEmpty() || pageWords.length == 0) return 0;
+        int qLen = queryWords.size();
+        if (qLen == 1) {
+            // Tek kelime — tüm sayfa kelimelerinde en iyi eşleşmeyi bul
+            double best = 0;
+            String qw = queryWords.get(0);
+            String qStem = turkishStem(qw);
+            for (String pw : pageWords) {
+                double sim = combinedSimilarity(qStem, turkishStem(pw));
+                if (sim > best) best = sim;
+                if (best > 0.95) break;
+            }
+            return best;
+        }
+
+        // Çok kelimeli — pencere kaydır
+        double bestWindowScore = 0;
+        for (int i = 0; i <= pageWords.length - qLen; i++) {
+            double windowScore = 0;
+            for (int j = 0; j < qLen; j++) {
+                String qw = queryWords.get(j);
+                String pw = pageWords[i + j];
+                double sim = combinedSimilarity(turkishStem(qw), turkishStem(pw));
+                // Pozisyon cezası — kelime sırası önemli
+                windowScore += sim;
+            }
+            windowScore /= qLen;
+            if (windowScore > bestWindowScore) bestWindowScore = windowScore;
+            if (bestWindowScore > 0.95) break;
+        }
+        return bestWindowScore;
+    }
 
     private String turkishStem(String word) {
         if (word.length() <= 4) return word;
@@ -1701,18 +1878,32 @@ public class PdfViewerActivity extends android.app.Activity {
 
 
     // OCR Cache DB işlemleri
+    // OCR cache format versiyonu — bu sayıyı artırınca tüm cache yeniden taranır
+    private static final int OCR_CACHE_VERSION = 3;
+
     private void ensureOcrCacheTable() {
+        // Tablo oluştur
         db.execSQL("CREATE TABLE IF NOT EXISTS pdf_ocr_cache (" +
             "pdf_uri TEXT, page INTEGER, ocr_text TEXT, blocks TEXT, " +
+            "cache_version INTEGER DEFAULT 0, " +
             "PRIMARY KEY(pdf_uri, page))");
-        // blocks sütunu yoksa ekle (eski versiyondan gelen DB)
+        // Eksik sütunları ekle
         try { db.execSQL("ALTER TABLE pdf_ocr_cache ADD COLUMN blocks TEXT"); } catch (Exception ignored) {}
-        // Koordinatsız (blocks boş/null) sayfaları yeniden tara
+        try { db.execSQL("ALTER TABLE pdf_ocr_cache ADD COLUMN cache_version INTEGER DEFAULT 0"); } catch (Exception ignored) {}
+        // Eski versiyondaki veya bozuk koordinatlı sayfaları sil — yeniden taranacak
         try {
-            db.execSQL("DELETE FROM pdf_ocr_cache WHERE pdf_uri=? AND (blocks IS NULL OR blocks='' OR blocks='[]')",
-                new String[]{pdfUri});
+            db.execSQL(
+                "DELETE FROM pdf_ocr_cache WHERE pdf_uri=? AND (" +
+                "  cache_version < ? OR " +
+                "  blocks IS NULL OR blocks='' OR blocks='[]' OR " +
+                // Eski x1/y1/x2/y2 formatı — x/y/w/h formatına geçtik
+                "  (blocks LIKE '%"x1"%' AND blocks NOT LIKE '%"x":%')" +
+                ")",
+                new Object[]{pdfUri, OCR_CACHE_VERSION});
         } catch (Exception ignored) {}
     }
+
+    private int getCacheVersion() { return OCR_CACHE_VERSION; }
 
     private int getCachedPageCount() {
         android.database.Cursor c = db.rawQuery(
@@ -1744,6 +1935,7 @@ public class PdfViewerActivity extends android.app.Activity {
             cv.put("page", page);
             cv.put("ocr_text", text);
             cv.put("blocks", blocks);
+            cv.put("cache_version", OCR_CACHE_VERSION);
             db.insertWithOnConflict("pdf_ocr_cache", null, cv, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE);
         } catch (Exception ignored) {}
     }
