@@ -1039,12 +1039,31 @@ public class PdfViewerActivity extends android.app.Activity {
         showSearchOverlay(query, null);
     }
 
-    private void showSearchOverlay(String query, float[] coords) {
+    private void showSearchOverlay(String query, float[] normCoords) {
         if (searchOverlay != null) {
             try { ((android.view.ViewGroup) searchOverlay.getParent()).removeView(searchOverlay); }
             catch (Exception ignored) {}
         }
-        searchOverlay = new SearchOverlay(this, query, coords);
+        // normCoords: [x1_norm, y1_norm, x2_norm, y2_norm, score] — 0-1 arası
+        // Bunları matrix (zoom+pan) kullanarak gerçek ekran koordinatına dönüştür
+        float[] screenCoords = null;
+        if (normCoords != null && normCoords.length >= 5 && normCoords[4] > 0.05f
+                && normCoords[2] > normCoords[0] && normCoords[3] > normCoords[1]) {
+            float[] mv = new float[9];
+            matrix.getValues(mv);
+            float scale = mv[android.graphics.Matrix.MSCALE_X];
+            float tx    = mv[android.graphics.Matrix.MTRANS_X];
+            float ty    = mv[android.graphics.Matrix.MTRANS_Y];
+            // normalize koordinat → bitmap piksel → ekran pikseli
+            float sx1 = normCoords[0] * imgWidth  * scale + tx;
+            float sy1 = normCoords[1] * imgHeight * scale + ty;
+            float sx2 = normCoords[2] * imgWidth  * scale + tx;
+            float sy2 = normCoords[3] * imgHeight * scale + ty;
+            float minH = 60f;
+            if (sy2 - sy1 < minH) { sy1 -= minH/4; sy2 = sy1 + minH; }
+            screenCoords = new float[]{sx1, sy1, sx2, sy2, normCoords[4]};
+        }
+        searchOverlay = new SearchOverlay(this, query, screenCoords);
         android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         try {
@@ -1082,40 +1101,23 @@ public class PdfViewerActivity extends android.app.Activity {
         new Thread(() -> {
             try {
                 ensureOcrCacheTable();
+
+                // Hem orijinal hem normalize sorgu dene
                 String normQuery = turkishNormalize(fQuery);
                 String[] qWords = normQuery.split("\s+");
                 java.util.List<String> validWords = new java.util.ArrayList<>();
                 for (String w : qWords) if (w.length() >= 2) validWords.add(w);
                 if (validWords.isEmpty()) {
-                    runOnUiThread(() -> { pd.dismiss(); Toast.makeText(this, "Çok kısa kelime", Toast.LENGTH_SHORT).show(); });
+                    runOnUiThread(() -> { pd.dismiss(); Toast.makeText(this, "Cok kisa kelime", Toast.LENGTH_SHORT).show(); });
                     return;
                 }
 
-                // ── Adım 1: Önce PDF metin katmanını dene (PdfBox) ──────────
-                runOnUiThread(() -> { pd.setMessage("Metin katmanı aranıyor..."); pd.setProgress(10); });
-                java.util.List<WordLocation> textLayerResults = searchInTextLayer(normQuery, validWords, pd);
-
-                if (!textLayerResults.isEmpty()) {
-                    // Metin katmanında bulundu — en kesin sonuç
-                    WordLocation best = textLayerResults.get(0);
-                    runOnUiThread(() -> {
-                        pd.dismiss();
-                        String msg = "Sayfa " + (best.page + 1) + " — kesin eşleşme ✓";
-                        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
-                        learnSearch(fQuery, best.page);
-                        showPage(best.page);
-                        float[] coords = {best.x, best.y, best.w, best.h, 1.0f};
-                        new android.os.Handler().postDelayed(() -> showSearchOverlay(fQuery, coords), 400);
-                    });
-                    return;
-                }
-
-                // ── Adım 2: OCR cache yoksa tara ───────────────────────────
+                // ── Adım 1: Cache yoksa OCR tara ──────────────────────────────
                 int cachedPages = getCachedPageCount();
                 android.os.ParcelFileDescriptor pfd = getContentResolver()
                     .openFileDescriptor(android.net.Uri.parse(pdfUri), "r");
                 if (pfd == null) {
-                    runOnUiThread(() -> { pd.dismiss(); Toast.makeText(this, "PDF açılamadı", Toast.LENGTH_SHORT).show(); });
+                    runOnUiThread(() -> { pd.dismiss(); Toast.makeText(this, "PDF acilamadi", Toast.LENGTH_SHORT).show(); });
                     return;
                 }
                 android.graphics.pdf.PdfRenderer renderer = new android.graphics.pdf.PdfRenderer(pfd);
@@ -1129,8 +1131,9 @@ public class PdfViewerActivity extends android.app.Activity {
 
                     for (int p = 0; p < totalPgs; p++) {
                         if (isPageCached(p)) continue;
-                        final int prog = 10 + (int)((p + 1.0) / totalPgs * 70);
-                        final int fp = p; final int fTotal = totalPgs; runOnUiThread(() -> { pd.setProgress(prog); pd.setMessage("Sayfa " + (fp+1) + "/" + fTotal); });
+                        final int fProg = 10 + (int)((p + 1.0) / totalPgs * 75);
+                        final int fP = p, fT = totalPgs;
+                        runOnUiThread(() -> { pd.setProgress(fProg); pd.setMessage("Sayfa " + (fP+1) + "/" + fT); });
 
                         android.graphics.pdf.PdfRenderer.Page pg = renderer.openPage(p);
                         int bw = pg.getWidth() * 4, bh = pg.getHeight() * 4;
@@ -1141,7 +1144,6 @@ public class PdfViewerActivity extends android.app.Activity {
                         mat.setScale(4, 4);
                         pg.render(bmp, null, mat, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
                         pg.close();
-
                         try {
                             com.google.mlkit.vision.text.Text vt =
                                 com.google.android.gms.tasks.Tasks.await(
@@ -1153,91 +1155,131 @@ public class PdfViewerActivity extends android.app.Activity {
                                 if (box == null) continue;
                                 if (!first) blocksJson.append(",");
                                 first = false;
-                                blocksJson.append("{").append("\"t\":\"").append(block.getText().replace("\"", "'").replace("\n", " ")).append("\",").append("\"x\":").append((float)box.left/bw).append(",").append("\"y\":").append((float)box.top/bh).append(",").append("\"w\":").append((float)box.width()/bw).append(",").append("\"h\":").append((float)box.height()/bh).append("}");
+                                String bt = block.getText().replace("\\", "").replace("\"", "'").replace("\n", " ");
+                                blocksJson.append("{\"t\":\"").append(bt)
+                                    .append("\",\"x\":").append((float)box.left/bw)
+                                    .append(",\"y\":").append((float)box.top/bh)
+                                    .append(",\"w\":").append((float)box.width()/bw)
+                                    .append(",\"h\":").append((float)box.height()/bh)
+                                    .append("}");
                             }
                             blocksJson.append("]");
                             savePageOcrWithBlocks(p, vt.getText(), blocksJson.toString());
-                        } catch (Exception e) { savePageOcrWithBlocks(p, "", "[]"); }
+                        } catch (Exception ex) { savePageOcrWithBlocks(p, "", "[]"); }
                         bmp.recycle();
                     }
                     recognizer.close();
                 }
                 renderer.close(); pfd.close();
 
-                // ── Adım 3: OCR cache üzerinde kesin arama ──────────────────
-                runOnUiThread(() -> { pd.setMessage("Sonuçlar değerlendiriliyor..."); pd.setProgress(90); });
+                // ── Adım 2: 3 katmanlı arama ──────────────────────────────────
+                runOnUiThread(() -> { pd.setMessage("Eslesmeler aranıyor..."); pd.setProgress(88); });
 
-                java.util.List<int[]> results = new java.util.ArrayList<>();
+                // Katman 1: TAM KELIME eşleşmesi (en güvenilir)
+                // Katman 2: KÖK eşleşmesi
+                // Katman 3: FUZZY eşleşmesi
+
+                int bestPage = -1;
                 float[] bestCoords = null;
-                int bestCoordPage = -1;
-                double bestCoordScore = 0;
+                int bestScore = 0;
+                int matchLayer = 0; // hangi katmanda bulundu
 
                 android.database.Cursor cur = db.rawQuery(
                     "SELECT page, ocr_text, blocks FROM pdf_ocr_cache WHERE pdf_uri=? ORDER BY page ASC",
                     new String[]{pdfUri});
 
                 while (cur.moveToNext()) {
-                    int pageNum = cur.getInt(0);
-                    String ocrText = turkishNormalize(cur.getString(1));
-                    String blocksJson = cur.getString(2);
-                    int score = calcScore(validWords, normQuery, ocrText);
-                    if (score > 0) {
-                        results.add(new int[]{pageNum, score});
-                        float[] coords = findBestBlock(blocksJson, validWords.toArray(new String[0]));
-                        if (coords != null && coords[4] > bestCoordScore) {
-                            bestCoords = coords;
-                            bestCoordScore = coords[4];
-                            bestCoordPage = pageNum;
+                    int pageNum  = cur.getInt(0);
+                    String rawText = cur.getString(1);
+                    String ocrText = turkishNormalize(rawText);
+                    String blocks  = cur.getString(2);
+
+                    int score = 0;
+                    int layer = 0;
+
+                    // Katman 1: tam sorgu substring
+                    if (ocrText.contains(normQuery)) {
+                        score = 100000;
+                        layer = 1;
+                    } else {
+                        // Katman 2: her kelimenin tam eşleşmesi
+                        int exactMatches = 0;
+                        for (String w : validWords) {
+                            if (ocrText.contains(w)) exactMatches++;
                         }
+                        if (exactMatches == validWords.size()) {
+                            score = 50000 + exactMatches * 1000;
+                            layer = 2;
+                        } else if (exactMatches > 0) {
+                            score = exactMatches * 5000;
+                            layer = 2;
+                        }
+
+                        // Katman 2b: kök eşleşmesi
+                        if (layer < 2) {
+                            int stemMatches = 0;
+                            for (String w : validWords) {
+                                String stem = turkishStem(w);
+                                if (ocrText.contains(stem) || ocrText.contains(w)) stemMatches++;
+                                else {
+                                    // Varyant dene
+                                    for (String v : generateTurkishVariants(stem)) {
+                                        if (ocrText.contains(v)) { stemMatches++; break; }
+                                    }
+                                }
+                            }
+                            if (stemMatches > 0) {
+                                score = Math.max(score, stemMatches * 3000);
+                                layer = 2;
+                            }
+                        }
+
+                        // Katman 3: BM25 + fuzzy (sadece katman 2 bulamazsa)
+                        if (layer == 0) {
+                            int bm25 = calcScore(validWords, normQuery, ocrText);
+                            if (bm25 > 0) { score = bm25; layer = 3; }
+                        }
+                    }
+
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestPage = pageNum;
+                        matchLayer = layer;
+                        // En iyi bloğu bul
+                        float[] c = findBestBlock(blocks, validWords.toArray(new String[0]));
+                        bestCoords = c;
                     }
                 }
                 cur.close();
 
-                if (results.isEmpty()) {
-                    runOnUiThread(() -> { pd.dismiss(); Toast.makeText(this, "\"" + fQuery + "\" bulunamadi", Toast.LENGTH_LONG).show(); });
+                if (bestPage < 0) {
+                    runOnUiThread(() -> { pd.dismiss();
+                        Toast.makeText(this, "\"" + fQuery + "\" bulunamadi", Toast.LENGTH_LONG).show(); });
                     return;
                 }
 
-                // Sadece en yüksek skoru al — belirsizliği sıfırla
-                int maxScore = 0;
-                for (int[] r : results) if (r[1] > maxScore) maxScore = r[1];
-
-                // %80 eşiğin altındakileri ele — sadece güçlü eşleşmeler
-                java.util.List<Integer> topPages = new java.util.ArrayList<>();
-                for (int[] r : results) {
-                    if (r[1] >= maxScore * 0.80) topPages.add(r[0]);
-                }
-
-                // Mevcut sayfaya en yakın olanı seç
-                int bestPage = topPages.get(0);
-                int minDist = Math.abs(topPages.get(0) - currentPage);
-                for (int pg2 : topPages) {
-                    int dist = Math.abs(pg2 - currentPage);
-                    if (dist < minDist) { minDist = dist; bestPage = pg2; }
-                }
-
-                final int finalPage = bestPage;
-                final float[] finalCoords = (bestCoordPage == bestPage) ? bestCoords : null;
-                final int totalFound = topPages.size();
+                final int finalPage   = bestPage;
+                final float[] finalCoords = bestCoords;
+                final String layerMsg = matchLayer == 1 ? "kesin eslesme ✓"
+                                      : matchLayer == 2 ? "kelime eslesme ✓"
+                                      : "yakin eslesme ~";
 
                 runOnUiThread(() -> {
                     pd.dismiss();
-                    String msg = totalFound == 1
-                        ? "Sayfa " + (finalPage + 1) + " — bulundu"
-                        : "En iyi eşleşme: Sayfa " + (finalPage + 1) + " (" + totalFound + " sonuç)";
-                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Sayfa " + (finalPage+1) + " — " + layerMsg, Toast.LENGTH_SHORT).show();
                     learnSearch(fQuery, finalPage);
                     showPage(finalPage);
-                    new android.os.Handler().postDelayed(() -> showSearchOverlay(fQuery, finalCoords), 400);
+                    new android.os.Handler().postDelayed(() -> showSearchOverlay(fQuery, finalCoords), 500);
                 });
 
-            } catch (Exception e) {
-                runOnUiThread(() -> { pd.dismiss(); Toast.makeText(this, "Hata: " + e.getMessage(), Toast.LENGTH_LONG).show(); });
+            } catch (Exception ex) {
+                runOnUiThread(() -> { pd.dismiss();
+                    Toast.makeText(this, "Hata: " + ex.getMessage(), Toast.LENGTH_LONG).show(); });
             }
         }).start();
     }
 
-    // OCR cache üzerinden metin katmanı benzeri arama
+        // OCR cache üzerinden metin katmanı benzeri arama
     private java.util.List<WordLocation> searchInTextLayer(String normQuery, java.util.List<String> validWords, android.app.ProgressDialog pd) {
         java.util.List<WordLocation> results = new java.util.ArrayList<>();
         try {
