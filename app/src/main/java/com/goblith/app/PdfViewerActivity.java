@@ -1505,7 +1505,7 @@ public class PdfViewerActivity extends android.app.Activity {
         float[] bestCoords = null;
 
         // JSON entry'leri ayır — hem },{ hem de }, { formatını destekle
-        String[] entries = blocksJson.replaceAll("^\[|\]$", "").split("\},\s*\{");
+        String[] entries = blocksJson.replaceAll("^\\[|\\]$", "").split("\\},\\s*\\{");
 
         for (String entry : entries) {
             try {
@@ -1897,9 +1897,9 @@ public class PdfViewerActivity extends android.app.Activity {
                 "  cache_version < ? OR " +
                 "  blocks IS NULL OR blocks='' OR blocks='[]' OR " +
                 // Eski x1/y1/x2/y2 formatı — x/y/w/h formatına geçtik
-                "  (blocks LIKE '%"x1"%' AND blocks NOT LIKE '%"x":%')" +
+                "  (blocks LIKE '%x1%' AND blocks NOT LIKE '%\"x\":%')" +
                 ")",
-                new Object[]{pdfUri, OCR_CACHE_VERSION});
+                new String[]{pdfUri, String.valueOf(OCR_CACHE_VERSION)});
         } catch (Exception ignored) {}
     }
 
