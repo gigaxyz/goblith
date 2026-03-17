@@ -1086,10 +1086,18 @@ public class PdfViewerActivity extends android.app.Activity {
         android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         try {
-            android.widget.FrameLayout frame = (android.widget.FrameLayout) pageView.getParent();
-            frame.addView(searchOverlay, lp);
+            android.view.ViewParent parent = pageView.getParent();
+            if (parent instanceof android.widget.FrameLayout) {
+                ((android.widget.FrameLayout) parent).addView(searchOverlay, lp);
+            } else if (parent instanceof android.view.ViewGroup) {
+                ((android.view.ViewGroup) parent).addView(searchOverlay, lp);
+            } else {
+                // pageView'ın parent'ı FrameLayout değil — root view'a ekle
+                android.view.ViewGroup root = findViewById(android.R.id.content);
+                root.addView(searchOverlay, lp);
+            }
         } catch (Exception e) {
-            Toast.makeText(this, "Isaret eklenemedi", Toast.LENGTH_SHORT).show();
+            android.util.Log.e("SearchOverlay", "Eklenemedi: " + e.getMessage());
         }
     }
 
@@ -1269,7 +1277,7 @@ public class PdfViewerActivity extends android.app.Activity {
 
                         // Katman 3: Kayan pencere fuzzy — en toleranslı
                         if (layer == 0) {
-                            String[] pageWords2 = ocrText.split("\s+");
+                            String[] pageWords2 = ocrText.split("\\s+");
                             double swScore = slidingWindowScore(validWords, pageWords2);
                             if (swScore > 0.72) {
                                 score = (int)(swScore * 15000);
@@ -1310,7 +1318,7 @@ public class PdfViewerActivity extends android.app.Activity {
                     Toast.makeText(this, "Sayfa " + (finalPage+1) + " — " + layerMsg, Toast.LENGTH_SHORT).show();
                     learnSearch(fQuery, finalPage);
                     showPage(finalPage);
-                    new android.os.Handler().postDelayed(() -> showSearchOverlay(fQuery, finalCoords), 500);
+                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> showSearchOverlay(fQuery, finalCoords), 500);
                 });
 
             } catch (Exception ex) {
