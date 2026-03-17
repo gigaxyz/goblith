@@ -2090,43 +2090,6 @@ public class PdfViewerActivity extends android.app.Activity {
             canvas.drawLine(right, bottom, right-cs,bottom,    paintBorder);
             canvas.drawLine(right, bottom, right,   bottom-cs, paintBorder);
         }
-                // Minimum yükseklik — çok ince olmasın
-                if (bottom - top < 40) bottom = top + 40;
-            } else {
-                left   = w * 0.02f;
-                right  = w * 0.98f;
-                top    = h * 0.35f;
-                bottom = top + h * 0.08f;
-            }
-
-            // Yarı saydam kırmızı dolgu
-            canvas.drawRect(left, top, right, bottom, paintFill);
-            // Kırmızı kenarlık — ince
-            paintBorder.setStrokeWidth(3);
-            canvas.drawRect(left, top, right, bottom, paintBorder);
-
-            // Köşe işaretleri — küçük
-            float cs = 18f;
-            paintBorder.setStrokeWidth(5);
-            canvas.drawLine(left, top, left + cs, top, paintBorder);
-            canvas.drawLine(left, top, left, top + cs, paintBorder);
-            canvas.drawLine(right, top, right - cs, top, paintBorder);
-            canvas.drawLine(right, top, right, top + cs, paintBorder);
-            canvas.drawLine(left, bottom, left + cs, bottom, paintBorder);
-            canvas.drawLine(left, bottom, left, bottom - cs, paintBorder);
-            canvas.drawLine(right, bottom, right - cs, bottom, paintBorder);
-            canvas.drawLine(right, bottom, right, bottom - cs, paintBorder);
-
-            // Sorgu etiketi — küçük
-            String label = query.length() > 30 ? query.substring(0, 30) + "..." : query;
-            paintText.setTextSize(h * 0.016f);
-            paintText.setColor(0xFFFF4444);
-            canvas.drawText(label, w / 2f, top - 10, paintText);
-
-            paintText.setTextSize(h * 0.013f);
-            paintText.setColor(0xFFFFAAAA);
-            canvas.drawText("Kapatmak icin dokun", w / 2f, bottom + 24, paintText);
-        }
     }
 
 
