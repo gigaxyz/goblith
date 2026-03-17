@@ -1100,7 +1100,6 @@ public class PdfViewerActivity extends android.app.Activity {
             android.util.Log.e("SearchOverlay", "Eklenemedi: " + e.getMessage());
         }
     }
-    }
 
     // ── Ana PDF Arama Motoru ─────────────────────────────────────────────────
     // Kelime konumu için veri sınıfı
