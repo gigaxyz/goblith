@@ -1127,198 +1127,104 @@ public class PdfViewerActivity extends android.app.Activity {
 
         new Thread(() -> {
             try {
-                ensureOcrCacheTable();
-
-                // Hem orijinal hem normalize sorgu dene
-                String normQuery = turkishNormalize(fQuery);
-                String[] qWords = normQuery.split("\s+");
-                java.util.List<String> validWords = new java.util.ArrayList<>();
-                for (String w : qWords) if (w.length() >= 2) validWords.add(w);
-                if (validWords.isEmpty()) {
-                    runOnUiThread(() -> { pd.dismiss(); Toast.makeText(this, "Cok kisa kelime", Toast.LENGTH_SHORT).show(); });
-                    return;
-                }
-
-                // ── Adım 1: Cache yoksa OCR tara ──────────────────────────────
-                int cachedPages = getCachedPageCount();
+                // ── MuPDF ile doğrudan metin katmanı arama ─────────────────
+                // MuPDF PDF'in kendi metin katmanını okur — OCR gerekmez
+                // Bold, italic, özel font — hiç fark etmez
                 android.os.ParcelFileDescriptor pfd = getContentResolver()
                     .openFileDescriptor(android.net.Uri.parse(pdfUri), "r");
                 if (pfd == null) {
-                    runOnUiThread(() -> { pd.dismiss(); Toast.makeText(this, "PDF acilamadi", Toast.LENGTH_SHORT).show(); });
+                    runOnUiThread(() -> { pd.dismiss();
+                        Toast.makeText(this, "PDF açılamadı", Toast.LENGTH_SHORT).show(); });
                     return;
                 }
-                android.graphics.pdf.PdfRenderer renderer = new android.graphics.pdf.PdfRenderer(pfd);
-                int totalPgs = renderer.getPageCount();
 
-                if (cachedPages < totalPgs) {
-                    runOnUiThread(() -> pd.setMessage("Sayfa taranıyor... (ilk seferlik)"));
-                    com.google.mlkit.vision.text.TextRecognizer recognizer =
-                        com.google.mlkit.vision.text.TextRecognition.getClient(
-                            com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS);
+                com.artifex.mupdf.fitz.Document doc =
+                    com.artifex.mupdf.fitz.Document.openDocument(pfd.getFileDescriptor());
+                int pageCount = doc.countPages();
 
-                    for (int p = 0; p < totalPgs; p++) {
-                        if (isPageCached(p)) continue;
-                        final int fProg = 10 + (int)((p + 1.0) / totalPgs * 75);
-                        final int fP = p, fT = totalPgs;
-                        runOnUiThread(() -> { pd.setProgress(fProg); pd.setMessage("Sayfa " + (fP+1) + "/" + fT); });
+                int    bestPage   = -1;
+                float[] bestQuad  = null; // [x0,y0,x1,y1,x2,y2,x3,y3] — MuPDF quad
+                float  bestPageW  = 1, bestPageH = 1;
 
-                        android.graphics.pdf.PdfRenderer.Page pg = renderer.openPage(p);
-                        int bw = pg.getWidth() * 4, bh = pg.getHeight() * 4;
-                        android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
-                        android.graphics.Canvas cvs = new android.graphics.Canvas(bmp);
-                        cvs.drawColor(android.graphics.Color.WHITE);
-                        android.graphics.Matrix mat = new android.graphics.Matrix();
-                        mat.setScale(4, 4);
-                        pg.render(bmp, null, mat, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
-                        pg.close();
-                        try {
-                            com.google.mlkit.vision.text.Text vt =
-                                com.google.android.gms.tasks.Tasks.await(
-                                    recognizer.process(com.google.mlkit.vision.common.InputImage.fromBitmap(bmp, 0)));
-                            StringBuilder blocksJson = new StringBuilder("[");
-                            boolean first = true;
-                            for (com.google.mlkit.vision.text.Text.TextBlock block : vt.getTextBlocks()) {
-                                android.graphics.Rect box = block.getBoundingBox();
-                                if (box == null) continue;
-                                if (!first) blocksJson.append(",");
-                                first = false;
-                                String bt = block.getText().replace("\\", "").replace("\"", "'").replace("\n", " ");
-                                blocksJson.append("{\"t\":\"").append(bt)
-                                    .append("\",\"x\":").append((float)box.left/bw)
-                                    .append(",\"y\":").append((float)box.top/bh)
-                                    .append(",\"w\":").append((float)box.width()/bw)
-                                    .append(",\"h\":").append((float)box.height()/bh)
-                                    .append("}");
-                            }
-                            blocksJson.append("]");
-                            // OCR metnini temizleyerek kaydet — index kalitesi artar
-                            String cleanOcrText = fixOcrErrors(vt.getText());
-                            savePageOcrWithBlocks(p, cleanOcrText, blocksJson.toString());
-                        } catch (Exception ex) { savePageOcrWithBlocks(p, "", "[]"); }
-                        bmp.recycle();
+                // Türkçe normalize — küçük harf + özel char
+                String normQ = turkishNormalize(fQuery);
+
+                for (int p = 0; p < pageCount; p++) {
+                    final int fp = p, ft = pageCount;
+                    final int prog = (int)((p + 1.0) / pageCount * 90) + 5;
+                    runOnUiThread(() -> {
+                        pd.setProgress(prog);
+                        pd.setMessage("Sayfa " + (fp+1) + "/" + ft);
+                    });
+
+                    com.artifex.mupdf.fitz.Page page = doc.loadPage(p);
+                    float pw = page.getBounds().x1 - page.getBounds().x0;
+                    float ph = page.getBounds().y1 - page.getBounds().y0;
+
+                    // MuPDF arama — hem orijinal hem normalize
+                    com.artifex.mupdf.fitz.Quad[] hits = page.search(fQuery);
+                    if (hits == null || hits.length == 0) {
+                        hits = page.search(normQ);
                     }
-                    recognizer.close();
+                    // Türkçe kök ile de dene
+                    if ((hits == null || hits.length == 0) && fQuery.length() > 4) {
+                        String stem = turkishStem(normQ.split("\s+")[0]);
+                        if (stem.length() >= 3) hits = page.search(stem);
+                    }
+
+                    if (hits != null && hits.length > 0) {
+                        bestPage  = p;
+                        // En üstteki hit'i al (y en küçük)
+                        com.artifex.mupdf.fitz.Quad best = hits[0];
+                        for (com.artifex.mupdf.fitz.Quad q : hits) {
+                            if (q.ul_y < best.ul_y) best = q;
+                        }
+                        // Normalize koordinat (0-1)
+                        bestQuad  = new float[]{
+                            best.ul_x / pw, best.ul_y / ph,
+                            best.ur_x / pw, best.ll_y / ph
+                        };
+                        bestPageW = pw;
+                        bestPageH = ph;
+                        page.destroy();
+                        break; // İlk bulunan sayfada dur
+                    }
+                    page.destroy();
                 }
-                renderer.close(); pfd.close();
-
-                // ── Adım 2: 3 katmanlı arama ──────────────────────────────────
-                runOnUiThread(() -> { pd.setMessage("Eslesmeler aranıyor..."); pd.setProgress(88); });
-
-                // Katman 1: TAM KELIME eşleşmesi (en güvenilir)
-                // Katman 2: KÖK eşleşmesi
-                // Katman 3: FUZZY eşleşmesi
-
-                int bestPage = -1;
-                float[] bestCoords = null;
-                int bestScore = 0;
-                int matchLayer = 0; // hangi katmanda bulundu
-
-                android.database.Cursor cur = db.rawQuery(
-                    "SELECT page, ocr_text, blocks FROM pdf_ocr_cache WHERE pdf_uri=? ORDER BY page ASC",
-                    new String[]{pdfUri});
-
-                while (cur.moveToNext()) {
-                    int pageNum  = cur.getInt(0);
-                    String rawText = cur.getString(1);
-                    String ocrText = turkishNormalize(rawText);
-                    String blocks  = cur.getString(2);
-
-                    int score = 0;
-                    int layer = 0;
-
-                    // Katman 1: tam sorgu substring
-                    if (ocrText.contains(normQuery)) {
-                        score = 100000;
-                        layer = 1;
-                    } else {
-                        // Katman 2: her kelimenin tam eşleşmesi
-                        int exactMatches = 0;
-                        for (String w : validWords) {
-                            if (ocrText.contains(w)) exactMatches++;
-                        }
-                        if (exactMatches == validWords.size()) {
-                            score = 50000 + exactMatches * 1000;
-                            layer = 2;
-                        } else if (exactMatches > 0) {
-                            score = exactMatches * 5000;
-                            layer = 2;
-                        }
-
-                        // Katman 2b: kök + OCR varyant eşleşmesi
-                        if (layer < 2) {
-                            int stemMatches = 0;
-                            for (String w : validWords) {
-                                String stem = turkishStem(w);
-                                if (ocrText.contains(w) || ocrText.contains(stem)) {
-                                    stemMatches++;
-                                } else {
-                                    // OCR hata varyantlarını dene — "ahlak"→"ahiak" gibi
-                                    boolean found = false;
-                                    for (String variant : generateOcrVariants(stem)) {
-                                        if (ocrText.contains(variant)) { found = true; break; }
-                                    }
-                                    if (!found) {
-                                        for (String v : generateTurkishVariants(stem)) {
-                                            if (ocrText.contains(v)) { found = true; break; }
-                                        }
-                                    }
-                                    if (found) stemMatches++;
-                                }
-                            }
-                            if (stemMatches > 0) {
-                                // Tüm kelimeler bulunduysa çok yüksek skor
-                                int s2 = stemMatches == validWords.size()
-                                    ? 20000 + stemMatches * 1000
-                                    : stemMatches * 3000;
-                                score = Math.max(score, s2);
-                                layer = 2;
-                            }
-                        }
-
-                        // Katman 3: Kayan pencere fuzzy — en toleranslı
-                        if (layer == 0) {
-                            String[] pageWords2 = ocrText.split("\\s+");
-                            double swScore = slidingWindowScore(validWords, pageWords2);
-                            if (swScore > 0.72) {
-                                score = (int)(swScore * 15000);
-                                layer = 3;
-                            } else {
-                                // Son çare: BM25
-                                int bm25 = calcScore(validWords, normQuery, ocrText);
-                                if (bm25 > 0) { score = bm25; layer = 3; }
-                            }
-                        }
-                    }
-
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestPage = pageNum;
-                        matchLayer = layer;
-                        // En iyi bloğu bul
-                        float[] c = findBestBlock(blocks, validWords.toArray(new String[0]));
-                        bestCoords = c;
-                    }
-                }
-                cur.close();
+                doc.destroy();
+                pfd.close();
 
                 if (bestPage < 0) {
-                    runOnUiThread(() -> { pd.dismiss();
-                        Toast.makeText(this, "\"" + fQuery + "\" bulunamadi", Toast.LENGTH_LONG).show(); });
+                    // MuPDF bulamadı — OCR cache'e düş
+                    runOnUiThread(() -> pd.setMessage("OCR cache aranıyor..."));
+                    int ocrResult = searchInOcrCache(normQ);
+                    if (ocrResult >= 0) {
+                        final int fp2 = ocrResult;
+                        runOnUiThread(() -> {
+                            pd.dismiss();
+                            Toast.makeText(this, "Sayfa " + (fp2+1) + " — OCR eşleşme", Toast.LENGTH_SHORT).show();
+                            learnSearch(fQuery, fp2);
+                            showPage(fp2);
+                            new android.os.Handler(android.os.Looper.getMainLooper())
+                                .postDelayed(() -> showSearchOverlay(fQuery, null), 500);
+                        });
+                    } else {
+                        runOnUiThread(() -> { pd.dismiss();
+                            Toast.makeText(this, """ + fQuery + "" bulunamadı", Toast.LENGTH_LONG).show(); });
+                    }
                     return;
                 }
 
-                final int finalPage   = bestPage;
-                final float[] finalCoords = bestCoords;
-                final String layerMsg = matchLayer == 1 ? "kesin eslesme ✓"
-                                      : matchLayer == 2 ? "kelime eslesme ✓"
-                                      : "yakin eslesme ~";
+                final int   finalPage  = bestPage;
+                final float[] finalQuad = bestQuad;
 
                 runOnUiThread(() -> {
                     pd.dismiss();
-                    Toast.makeText(this, "Sayfa " + (finalPage+1) + " — " + layerMsg, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Sayfa " + (finalPage+1) + " ✓", Toast.LENGTH_SHORT).show();
                     learnSearch(fQuery, finalPage);
                     showPage(finalPage);
-                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> showSearchOverlay(fQuery, finalCoords), 500);
+                    new android.os.Handler(android.os.Looper.getMainLooper())
+                        .postDelayed(() -> showSearchOverlay(fQuery, finalQuad), 500);
                 });
 
             } catch (Exception ex) {
@@ -1326,6 +1232,37 @@ public class PdfViewerActivity extends android.app.Activity {
                     Toast.makeText(this, "Hata: " + ex.getMessage(), Toast.LENGTH_LONG).show(); });
             }
         }).start();
+    }
+
+    // OCR cache fallback — MuPDF bulamazsa (taranmış PDF)
+    private int searchInOcrCache(String normQuery) {
+        try {
+            ensureOcrCacheTable();
+            String[] qWords = normQuery.split("\s+");
+            java.util.List<String> validWords = new java.util.ArrayList<>();
+            for (String w : qWords) if (w.length() >= 2) validWords.add(w);
+            if (validWords.isEmpty()) return -1;
+
+            int bestPage = -1, bestScore = 0;
+            android.database.Cursor cur = db.rawQuery(
+                "SELECT page, ocr_text FROM pdf_ocr_cache WHERE pdf_uri=? ORDER BY page ASC",
+                new String[]{pdfUri});
+            while (cur.moveToNext()) {
+                int page = cur.getInt(0);
+                String text = turkishNormalize(cur.getString(1));
+                // Tam eşleşme
+                if (text.contains(normQuery)) { cur.close(); return page; }
+                // Kelime eşleşmesi
+                int hits = 0;
+                for (String w : validWords) {
+                    if (text.contains(w) || text.contains(turkishStem(w))) hits++;
+                }
+                int score = hits * 1000;
+                if (score > bestScore) { bestScore = score; bestPage = page; }
+            }
+            cur.close();
+            return bestScore > 0 ? bestPage : -1;
+        } catch (Exception e) { return -1; }
     }
 
         // OCR cache üzerinden metin katmanı benzeri arama
