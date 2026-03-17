@@ -1100,6 +1100,7 @@ public class PdfViewerActivity extends android.app.Activity {
             android.util.Log.e("SearchOverlay", "Eklenemedi: " + e.getMessage());
         }
     }
+    }
 
     // ── Ana PDF Arama Motoru ─────────────────────────────────────────────────
     // Kelime konumu için veri sınıfı
@@ -2047,17 +2048,49 @@ public class PdfViewerActivity extends android.app.Activity {
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
             if (!visible) return;
-            int w = getWidth(), h = getHeight();
+            int vw = getWidth(), vh = getHeight();
 
-            // Koordinat varsa tam konuma git, yoksa ortada göster
-            float left, right, top, bottom;
-            if (coords != null && coords.length >= 5 && coords[4] > 0.1f && coords[2] > coords[0] && coords[3] > coords[1]) {
-                // ML Kit koordinatları — normalize edilmiş (0-1)
-                float padding = 0.01f;
-                left   = (coords[0] - padding) * w;
-                top    = (coords[1] - padding) * h;
-                right  = (coords[2] + padding) * w;
-                bottom = (coords[3] + padding) * h;
+            // coords artık showSearchOverlay tarafından hesaplanmış EKRAN koordinatı
+            // normalize (0-1) değil, direkt piksel — çarpma yapma!
+            float left, top, right, bottom;
+            if (coords != null && coords.length >= 5 && coords[4] > 0.05f
+                    && coords[2] > coords[0] && coords[3] > coords[1]) {
+                left   = coords[0];
+                top    = coords[1];
+                right  = coords[2];
+                bottom = coords[3];
+            } else {
+                // Koordinat yok — sayfanın ortasında yatay band göster
+                left   = vw * 0.05f;
+                right  = vw * 0.95f;
+                top    = vh * 0.42f;
+                bottom = top + vh * 0.06f;
+            }
+
+            // Sarı dolgu
+            paintFill.setColor(0x66FFD700);
+            paintFill.setStyle(Paint.Style.FILL);
+            canvas.drawRect(left, top, right, bottom, paintFill);
+
+            // Turuncu kenarlık
+            paintBorder.setColor(0xFFFF8C00);
+            paintBorder.setStyle(Paint.Style.STROKE);
+            paintBorder.setStrokeWidth(5);
+            canvas.drawRect(left, top, right, bottom, paintBorder);
+
+            // Köşe kırmızı vurgu
+            float cs = 24f;
+            paintBorder.setColor(0xFFFF2222);
+            paintBorder.setStrokeWidth(7);
+            canvas.drawLine(left,  top,    left+cs, top,       paintBorder);
+            canvas.drawLine(left,  top,    left,    top+cs,    paintBorder);
+            canvas.drawLine(right, top,    right-cs,top,       paintBorder);
+            canvas.drawLine(right, top,    right,   top+cs,    paintBorder);
+            canvas.drawLine(left,  bottom, left+cs, bottom,    paintBorder);
+            canvas.drawLine(left,  bottom, left,    bottom-cs, paintBorder);
+            canvas.drawLine(right, bottom, right-cs,bottom,    paintBorder);
+            canvas.drawLine(right, bottom, right,   bottom-cs, paintBorder);
+        }
                 // Minimum yükseklik — çok ince olmasın
                 if (bottom - top < 40) bottom = top + 40;
             } else {
