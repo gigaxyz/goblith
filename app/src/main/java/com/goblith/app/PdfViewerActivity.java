@@ -1184,7 +1184,7 @@ public class PdfViewerActivity extends android.app.Activity {
                                 if (box == null) continue;
                                 if (!first) blocksJson.append(",");
                                 first = false;
-                                String bt = block.getText().replace(""","'").replace("\n"," ");
+                                String bt = block.getText().replace("\"", "'").replace("\n", " ");
                                 blocksJson.append("{").append("\"t\":{\"").append(bt)
                                     .append("\",\"x\":").append((float)box.left/bw)
                                     .append(",\"y\":").append((float)box.top/bh)
