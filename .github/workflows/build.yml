@@ -28,6 +28,10 @@ jobs:
           echo "${{ secrets.DEBUG_KEYSTORE }}" | base64 -d > ~/.android/debug.keystore
           keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android | grep SHA1
 
+      - name: Inject API Keys
+        run: |
+          sed -i "s/BUILD_GEMINI_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" app/src/main/java/com/goblith/app/GeminiService.java
+
       - name: Build debug APK
         run: ./gradlew assembleDebug
 

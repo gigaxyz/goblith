@@ -9,7 +9,7 @@ import java.net.*;
 
 public class GeminiService {
     // Gemini 1.5 Flash — ücretsiz tier
-    private static final String API_KEY = "AIzaSyANtbPxnS6JOPVHfxT3wtB2O-EJwMODe0M";
+    private static final String API_KEY = "BUILD_GEMINI_API_KEY";
     private static final String API_URL =
         "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + API_KEY;
 
