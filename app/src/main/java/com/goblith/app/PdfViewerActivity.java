@@ -1319,7 +1319,7 @@ public class PdfViewerActivity extends android.app.Activity {
     private int searchInOcrCache(String normQuery) {
         try {
             ensureOcrCacheTable();
-            String[] qWords = normQuery.split("\s+");
+            String[] qWords = normQuery.split("\\s+");
             java.util.List<String> validWords = new java.util.ArrayList<>();
             for (String w : qWords) if (w.length() >= 2) validWords.add(w);
             if (validWords.isEmpty()) return -1;
