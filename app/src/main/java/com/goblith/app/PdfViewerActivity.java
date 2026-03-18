@@ -1127,107 +1127,117 @@ public class PdfViewerActivity extends android.app.Activity {
 
         new Thread(() -> {
             try {
-                // ── MuPDF ile doğrudan metin katmanı arama ─────────────────
-                // MuPDF PDF'in kendi metin katmanını okur — OCR gerekmez
-                // Bold, italic, özel font — hiç fark etmez
+                ensureOcrCacheTable();
+                String normQuery = turkishNormalize(fQuery);
+                String[] qWords = normQuery.split("\\s+");
+                java.util.List<String> validWords = new java.util.ArrayList<>();
+                for (String w : qWords) if (w.length() >= 2) validWords.add(w);
+                if (validWords.isEmpty()) {
+                    runOnUiThread(() -> { pd.dismiss();
+                        Toast.makeText(this, "Cok kisa kelime", Toast.LENGTH_SHORT).show(); });
+                    return;
+                }
+
+                // OCR cache yoksa tara
+                int cachedPages = getCachedPageCount();
                 android.os.ParcelFileDescriptor pfd = getContentResolver()
                     .openFileDescriptor(android.net.Uri.parse(pdfUri), "r");
                 if (pfd == null) {
                     runOnUiThread(() -> { pd.dismiss();
-                        Toast.makeText(this, "PDF açılamadı", Toast.LENGTH_SHORT).show(); });
+                        Toast.makeText(this, "PDF acilamadi", Toast.LENGTH_SHORT).show(); });
                     return;
                 }
+                android.graphics.pdf.PdfRenderer renderer =
+                    new android.graphics.pdf.PdfRenderer(pfd);
+                int totalPgs = renderer.getPageCount();
 
-                // MuPDF kaldırıldı
-                int pageCount = doc.countPages();
-
-                int    bestPage   = -1;
-                float[] bestQuad  = null; // [x0,y0,x1,y1,x2,y2,x3,y3] — MuPDF quad
-                float  bestPageW  = 1, bestPageH = 1;
-
-                // Türkçe normalize — küçük harf + özel char
-                String normQ = turkishNormalize(fQuery);
-
-                for (int p = 0; p < pageCount; p++) {
-                    final int fp = p, ft = pageCount;
-                    final int prog = (int)((p + 1.0) / pageCount * 90) + 5;
-                    runOnUiThread(() -> {
-                        pd.setProgress(prog);
-                        pd.setMessage("Sayfa " + (fp+1) + "/" + ft);
-                    });
-
-                    // MuPDF kaldırıldı
-                    float pw = page.getBounds().x1 - page.getBounds().x0;
-                    float ph = page.getBounds().y1 - page.getBounds().y0;
-
-                    // MuPDF arama — hem orijinal hem normalize
-                    // MuPDF kaldırıldı
-                    if (hits == null || hits.length == 0) {
-                        hits = page.search(normQ);
+                if (cachedPages < totalPgs) {
+                    runOnUiThread(() -> pd.setMessage("Sayfa taranıyor..."));
+                    com.google.mlkit.vision.text.TextRecognizer recognizer =
+                        com.google.mlkit.vision.text.TextRecognition.getClient(
+                            com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS);
+                    for (int p = 0; p < totalPgs; p++) {
+                        if (isPageCached(p)) continue;
+                        final int fP = p, fT = totalPgs;
+                        final int prog = 10 + (int)((p+1.0)/totalPgs*75);
+                        runOnUiThread(() -> { pd.setProgress(prog);
+                            pd.setMessage("Sayfa " + (fP+1) + "/" + fT); });
+                        android.graphics.pdf.PdfRenderer.Page pg = renderer.openPage(p);
+                        int bw = pg.getWidth()*4, bh = pg.getHeight()*4;
+                        android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(
+                            bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
+                        android.graphics.Canvas cvs = new android.graphics.Canvas(bmp);
+                        cvs.drawColor(android.graphics.Color.WHITE);
+                        android.graphics.Matrix mat = new android.graphics.Matrix();
+                        mat.setScale(4, 4);
+                        pg.render(bmp, null, mat, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
+                        pg.close();
+                        try {
+                            com.google.mlkit.vision.text.Text vt =
+                                com.google.android.gms.tasks.Tasks.await(
+                                    recognizer.process(
+                                        com.google.mlkit.vision.common.InputImage.fromBitmap(bmp, 0)));
+                            StringBuilder blocksJson = new StringBuilder("[");
+                            boolean first = true;
+                            for (com.google.mlkit.vision.text.Text.TextBlock block : vt.getTextBlocks()) {
+                                android.graphics.Rect box = block.getBoundingBox();
+                                if (box == null) continue;
+                                if (!first) blocksJson.append(",");
+                                first = false;
+                                String bt = block.getText().replace(""","'").replace("\n"," ");
+                                blocksJson.append("{").append("\"t\":{\"").append(bt)
+                                    .append("\",\"x\":").append((float)box.left/bw)
+                                    .append(",\"y\":").append((float)box.top/bh)
+                                    .append(",\"w\":").append((float)box.width()/bw)
+                                    .append(",\"h\":").append((float)box.height()/bh)
+                                    .append("}");
+                            }
+                            blocksJson.append("]");
+                            savePageOcrWithBlocks(p, fixOcrErrors(vt.getText()), blocksJson.toString());
+                        } catch (Exception ex) { savePageOcrWithBlocks(p, "", "[]"); }
+                        bmp.recycle();
                     }
-                    // Türkçe kök ile de dene
-                    if ((hits == null || hits.length == 0) && fQuery.length() > 4) {
-                        String stem = turkishStem(normQ.split("\s+")[0]);
-                        if (stem.length() >= 3) hits = page.search(stem);
-                    }
-
-                    if (hits != null && hits.length > 0) {
-                        bestPage  = p;
-                        // En üstteki hit'i al (y en küçük)
-                        // MuPDF kaldırıldı
-                        for (// MuPDF kaldırıldı
-                        }
-                        // Normalize koordinat (0-1)
-                        bestQuad  = new float[]{
-                            best.ul_x / pw, best.ul_y / ph,
-                            best.ur_x / pw, best.ll_y / ph
-                        };
-                        bestPageW = pw;
-                        bestPageH = ph;
-                        page.destroy();
-                        break; // İlk bulunan sayfada dur
-                    }
-                    page.destroy();
+                    recognizer.close();
                 }
-                doc.destroy();
-                pfd.close();
+                renderer.close(); pfd.close();
+
+                // Cache'de ara
+                runOnUiThread(() -> { pd.setMessage("Eslesmeler aranıyor..."); pd.setProgress(90); });
+                int bestPage = searchInOcrCache(normQuery);
 
                 if (bestPage < 0) {
-                    // MuPDF bulamadı — OCR cache'e düş
-                    runOnUiThread(() -> pd.setMessage("OCR cache aranıyor..."));
-                    int ocrResult = searchInOcrCache(normQ);
-                    if (ocrResult >= 0) {
-                        final int fp2 = ocrResult;
-                        runOnUiThread(() -> {
-                            pd.dismiss();
-                            Toast.makeText(this, "Sayfa " + (fp2+1) + " — OCR eşleşme", Toast.LENGTH_SHORT).show();
-                            learnSearch(fQuery, fp2);
-                            showPage(fp2);
-                            new android.os.Handler(android.os.Looper.getMainLooper())
-                                .postDelayed(() -> showSearchOverlay(fQuery, null), 500);
-                        });
-                    } else {
-                        runOnUiThread(() -> { pd.dismiss();
-                            Toast.makeText(this, """ + fQuery + "" bulunamadı", Toast.LENGTH_LONG).show(); });
-                    }
+                    runOnUiThread(() -> { pd.dismiss();
+                        Toast.makeText(this, "\"" + fQuery + "\" bulunamadi",
+                            Toast.LENGTH_LONG).show(); });
                     return;
                 }
 
-                final int   finalPage  = bestPage;
-                final float[] finalQuad = bestQuad;
+                // En iyi bloğu bul
+                android.database.Cursor bc = db.rawQuery(
+                    "SELECT blocks FROM pdf_ocr_cache WHERE pdf_uri=? AND page=?",
+                    new String[]{pdfUri, String.valueOf(bestPage)});
+                float[] coords = null;
+                if (bc.moveToFirst()) {
+                    coords = findBestBlock(bc.getString(0), validWords.toArray(new String[0]));
+                }
+                bc.close();
 
+                final int finalPage     = bestPage;
+                final float[] finalCoords = coords;
                 runOnUiThread(() -> {
                     pd.dismiss();
-                    Toast.makeText(this, "Sayfa " + (finalPage+1) + " ✓", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Sayfa " + (finalPage+1) + " bulundu",
+                        Toast.LENGTH_SHORT).show();
                     learnSearch(fQuery, finalPage);
                     showPage(finalPage);
                     new android.os.Handler(android.os.Looper.getMainLooper())
-                        .postDelayed(() -> showSearchOverlay(fQuery, finalQuad), 500);
+                        .postDelayed(() -> showSearchOverlay(fQuery, finalCoords), 500);
                 });
 
             } catch (Exception ex) {
                 runOnUiThread(() -> { pd.dismiss();
-                    Toast.makeText(this, "Hata: " + ex.getMessage(), Toast.LENGTH_LONG).show(); });
+                    Toast.makeText(this, "Hata: " + ex.getMessage(),
+                        Toast.LENGTH_LONG).show(); });
             }
         }).start();
     }
