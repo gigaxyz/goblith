@@ -1254,11 +1254,10 @@ public class PdfViewerActivity extends android.app.Activity {
     // MuPDF ile metin katmanında ara — [sayfa, hitIndex] döner
     private int[] searchWithMuPdf(String query, String normQuery) {
         try {
-            android.os.ParcelFileDescriptor pfd = getContentResolver()
-                .openFileDescriptor(android.net.Uri.parse(pdfUri), "r");
-            if (pfd == null) return null;
+            String path = getRealPathFromUri(android.net.Uri.parse(pdfUri));
+            if (path == null) return null;
             com.artifex.mupdf.fitz.Document doc =
-                com.artifex.mupdf.fitz.Document.openDocument(pfd.getFileDescriptor());
+                com.artifex.mupdf.fitz.Document.openDocument(path);
             int pageCount = doc.countPages();
             for (int p = 0; p < pageCount; p++) {
                 com.artifex.mupdf.fitz.Page page = doc.loadPage(p);
@@ -1286,11 +1285,10 @@ public class PdfViewerActivity extends android.app.Activity {
     // MuPDF ile belirli sayfadaki hit koordinatını al — normalize [0-1]
     private float[] getMuPdfCoords(int pageNum, String query, String normQuery) {
         try {
-            android.os.ParcelFileDescriptor pfd = getContentResolver()
-                .openFileDescriptor(android.net.Uri.parse(pdfUri), "r");
-            if (pfd == null) return null;
+            String path = getRealPathFromUri(android.net.Uri.parse(pdfUri));
+            if (path == null) return null;
             com.artifex.mupdf.fitz.Document doc =
-                com.artifex.mupdf.fitz.Document.openDocument(pfd.getFileDescriptor());
+                com.artifex.mupdf.fitz.Document.openDocument(path);
             com.artifex.mupdf.fitz.Page page = doc.loadPage(pageNum);
             com.artifex.mupdf.fitz.Rect bounds = page.getBounds();
             float pw = bounds.x1 - bounds.x0;
