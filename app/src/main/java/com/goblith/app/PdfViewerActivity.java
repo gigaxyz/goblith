@@ -327,7 +327,6 @@ public class PdfViewerActivity extends android.app.Activity {
         topBar2.addView(flex(btnPdfSearch,6));
 
         Button btnAI = makeIconBtn("AI", R.drawable.ic_isaretleme, 0xFF6A1B9A);
-        btnAI.setText("🤖");
         btnAI.setOnClickListener(v -> showAIDialog());
         topBar2.addView(flex(btnAI,6));
 
@@ -895,7 +894,7 @@ public class PdfViewerActivity extends android.app.Activity {
         String chapterTitle = getChapterTitle(currentPage);
         String chapterLabel = chapterTitle != null
             ? "📚 Bölüm Özetle: " + chapterTitle
-            : "📚 Bölüm Özetle (" + (chapterRange[0]+1) + "-" + (chapterRange[1]+1) + ". sayfa)";
+            : "📚 Bölüm Özetle";
 
         String[] options = {
             "📄 Bu Sayfayı Özetle",
@@ -923,20 +922,14 @@ public class PdfViewerActivity extends android.app.Activity {
         pd.setCancelable(false);
         pd.show();
 
-        // Önce OCR cache'den metni al
-        android.database.Cursor cur = db.rawQuery(
-            "SELECT ocr_text FROM pdf_ocr_cache WHERE pdf_uri=? AND page=?",
-            new String[]{pdfUri, String.valueOf(currentPage)});
-        String pageText = cur.moveToFirst() ? cur.getString(0) : "";
-        cur.close();
-
-        if (pageText.isEmpty()) {
-            pd.dismiss();
-            Toast.makeText(this, "Bu sayfa henüz indekslenmemiş", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        GeminiService.summarizePage(pageText, bookName, currentPage, new GeminiService.OnResultListener() {
+        new Thread(() -> {
+            String pageText = extractPageText(currentPage);
+            if (pageText.trim().isEmpty()) {
+                runOnUiThread(() -> { pd.dismiss();
+                    Toast.makeText(this, "Bu sayfada metin bulunamadı", Toast.LENGTH_SHORT).show(); });
+                return;
+            }
+            GeminiService.summarizePage(pageText, bookName, currentPage, new GeminiService.OnResultListener() {
             @Override public void onResult(String result) {
                 pd.dismiss();
                 showAIResult("Sayfa " + (currentPage + 1) + " Özeti", result);
@@ -946,6 +939,7 @@ public class PdfViewerActivity extends android.app.Activity {
                 Toast.makeText(PdfViewerActivity.this, error, Toast.LENGTH_LONG).show();
             }
         });
+        }).start();
     }
 
     private void askQuestionAboutPage() {
