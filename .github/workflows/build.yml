@@ -28,12 +28,6 @@ jobs:
           echo "${{ secrets.DEBUG_KEYSTORE }}" | base64 -d > ~/.android/debug.keystore
           keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android | grep SHA1
 
-      - name: Download MuPDF AAR
-        run: |
-          mkdir -p app/libs
-          curl -L "https://mupdf.com/downloads/archive/mupdf-1.23.7-android-fitz.aar" -o app/libs/mupdf-fitz.aar ||           curl -L "https://github.com/ArtifexSoftware/mupdf-android-fitz/releases/download/1.23.7/mupdf-android-fitz-release.aar" -o app/libs/mupdf-fitz.aar ||           curl -L "https://www.mupdf.com/downloads/archive/mupdf-1.23.7-android-fitz.aar" -o app/libs/mupdf-fitz.aar
-          ls -lh app/libs/
-
       - name: Build debug APK
         run: ./gradlew assembleDebug
 

@@ -1138,8 +1138,7 @@ public class PdfViewerActivity extends android.app.Activity {
                     return;
                 }
 
-                com.artifex.mupdf.fitz.Document doc =
-                    com.artifex.mupdf.fitz.Document.openDocument(pfd.getFileDescriptor());
+                // MuPDF kaldırıldı
                 int pageCount = doc.countPages();
 
                 int    bestPage   = -1;
@@ -1157,12 +1156,12 @@ public class PdfViewerActivity extends android.app.Activity {
                         pd.setMessage("Sayfa " + (fp+1) + "/" + ft);
                     });
 
-                    com.artifex.mupdf.fitz.Page page = doc.loadPage(p);
+                    // MuPDF kaldırıldı
                     float pw = page.getBounds().x1 - page.getBounds().x0;
                     float ph = page.getBounds().y1 - page.getBounds().y0;
 
                     // MuPDF arama — hem orijinal hem normalize
-                    com.artifex.mupdf.fitz.Quad[] hits = page.search(fQuery);
+                    // MuPDF kaldırıldı
                     if (hits == null || hits.length == 0) {
                         hits = page.search(normQ);
                     }
@@ -1175,9 +1174,8 @@ public class PdfViewerActivity extends android.app.Activity {
                     if (hits != null && hits.length > 0) {
                         bestPage  = p;
                         // En üstteki hit'i al (y en küçük)
-                        com.artifex.mupdf.fitz.Quad best = hits[0];
-                        for (com.artifex.mupdf.fitz.Quad q : hits) {
-                            if (q.ul_y < best.ul_y) best = q;
+                        // MuPDF kaldırıldı
+                        for (// MuPDF kaldırıldı
                         }
                         // Normalize koordinat (0-1)
                         bestQuad  = new float[]{
