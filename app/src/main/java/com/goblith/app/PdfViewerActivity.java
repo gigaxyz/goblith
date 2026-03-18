@@ -1302,8 +1302,7 @@ public class PdfViewerActivity extends android.app.Activity {
                 for (int p = 0; p < pageCount; p++) {
                     com.artifex.mupdf.fitz.Page page = doc.loadPage(p);
                     // Sayfanın ilk 300 karakterine bak — başlıklar sayfanın üstündedir
-                    com.artifex.mupdf.fitz.StructuredText st = page.toStructuredText("preserve-whitespace");
-                    String text = st != null ? st.copy() : "";
+                    String text = page.getText("preserve-whitespace");
                     page.destroy();
 
                     if (text.isEmpty()) continue;
@@ -1363,8 +1362,7 @@ public class PdfViewerActivity extends android.app.Activity {
                 com.artifex.mupdf.fitz.Document doc =
                     com.artifex.mupdf.fitz.Document.openDocument(path);
                 com.artifex.mupdf.fitz.Page pg = doc.loadPage(page);
-                com.artifex.mupdf.fitz.StructuredText st = pg.toStructuredText("preserve-whitespace");
-                String text = st != null ? st.copy() : "";
+                String text = pg.getText("preserve-whitespace");
                 pg.destroy(); doc.destroy();
                 if (!text.trim().isEmpty()) return text;
             }

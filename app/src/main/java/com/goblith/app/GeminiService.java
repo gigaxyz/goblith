@@ -52,6 +52,10 @@ public class GeminiService {
         callGemini(prompt, listener);
     }
 
+    public static void callGeminiPublic(String prompt, OnResultListener listener) {
+        callGemini(prompt, listener);
+    }
+
     private static void callGemini(String prompt, OnResultListener listener) {
         new Thread(() -> {
             try {
