@@ -957,12 +957,7 @@ public class PdfViewerActivity extends android.app.Activity {
             pd.setCancelable(false);
             pd.show();
 
-            android.database.Cursor cur = db.rawQuery(
-                "SELECT ocr_text FROM pdf_ocr_cache WHERE pdf_uri=? AND page=?",
-                new String[]{pdfUri, String.valueOf(currentPage)});
-            String pageText = cur.moveToFirst() ? cur.getString(0) : "";
-            cur.close();
-
+            String pageText = extractPageText(currentPage);
             GeminiService.askQuestion(pageText, question, bookName, new GeminiService.OnResultListener() {
                 @Override public void onResult(String result) {
                     pd.dismiss();
@@ -1371,9 +1366,12 @@ public class PdfViewerActivity extends android.app.Activity {
                     new com.artifex.mupdf.fitz.Point(b2.x0, b2.y0),
                     new com.artifex.mupdf.fitz.Point(b2.x1, b2.y1)) : "";
                 pg.destroy(); doc.destroy();
+                android.util.Log.d("ExtractText", "MuPDF sayfa " + page + ": " + text.length() + " char");
                 if (!text.trim().isEmpty()) return text;
             }
-        } catch (Exception e) { /* OCR'a düş */ }
+        } catch (Exception e) {
+            android.util.Log.e("ExtractText", "MuPDF hata: " + e.getMessage());
+        }
         // OCR cache fallback
         try {
             android.database.Cursor c = db.rawQuery(
@@ -2313,7 +2311,7 @@ public class PdfViewerActivity extends android.app.Activity {
     private Button makeActionBtn(String t,int c){Button b=new Button(this);b.setText(t);b.setBackgroundColor(c);b.setTextColor(0xFFFFFFFF);b.setTextSize(13);b.setTypeface(null,android.graphics.Typeface.BOLD);b.setPadding(16,12,16,12);return b;}
     private Button makeIconBtn(String t,int iconRes,int c){
         Button b=new Button(this);b.setText(t);b.setBackgroundColor(c);b.setTextColor(0xFFFFFFFF);b.setTextSize(10);b.setTypeface(null,android.graphics.Typeface.BOLD);b.setGravity(Gravity.CENTER);b.setPadding(4,10,4,10);
-        try{Drawable icon=getResources().getDrawable(iconRes);if(icon!=null){icon.setBounds(0,0,40,40);b.setCompoundDrawables(null,icon,null,null);b.setCompoundDrawablePadding(4);}}catch(Exception ignored){}
+        try{Drawable icon=getResources().getDrawable(iconRes);if(icon!=null){icon.setBounds(0,0,28,28);b.setCompoundDrawables(null,icon,null,null);b.setCompoundDrawablePadding(4);}}catch(Exception ignored){}
         b.setLayoutParams(new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1));return b;
     }
     private Button flex(Button b,int lm){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1);lp.setMargins(lm,0,0,0);b.setLayoutParams(lp);return b;}
