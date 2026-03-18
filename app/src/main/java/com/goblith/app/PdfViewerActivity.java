@@ -326,6 +326,11 @@ public class PdfViewerActivity extends android.app.Activity {
         Button btnPdfSearch = makeSmallBtn("🔍 ARA", 0xFF4C1D95);
         topBar2.addView(flex(btnPdfSearch,6));
 
+        Button btnAI = makeIconBtn("AI", R.drawable.ic_isaretleme, 0xFF6A1B9A);
+        btnAI.setText("🤖");
+        btnAI.setOnClickListener(v -> showAIDialog());
+        topBar2.addView(flex(btnAI,6));
+
         btnPdfSearch.setOnClickListener(v -> showPdfSearchDialog());
 
         // ── Çizim toolbar ─────────────────────────────────────────────────────
