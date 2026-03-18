@@ -749,6 +749,7 @@ public class PdfViewerActivity extends android.app.Activity {
     private void showPage(int index){
         if(pdfRenderer==null) return;
         currentPage=index; matrix.reset(); pageView.setImageMatrix(matrix);
+        if (index == 0 && chapterMap == null) buildChapterMapAsync();
         if(drawingOverlay!=null){
             drawingOverlay.load(new ArrayList<>(),new ArrayList<>());
             drawingOverlay.viewMatrix=new Matrix(matrix);
@@ -883,12 +884,28 @@ public class PdfViewerActivity extends android.app.Activity {
     private void showAIDialog() {
         android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
         b.setTitle("Yapay Zeka Asistanı");
-        String[] options = {"Bu Sayfayı Özetle", "Bu Sayfa Hakkında Soru Sor", "Arşivimi Analiz Et"};
+
+        // Mevcut sayfanın bölümünü bul
+        int[] chapterRange = findCurrentChapterRange();
+        String chapterTitle = getChapterTitle(currentPage);
+        String chapterLabel = chapterTitle != null
+            ? "📚 Bölüm Özetle: " + chapterTitle
+            : "📚 Bölüm Özetle (" + (chapterRange[0]+1) + "-" + (chapterRange[1]+1) + ". sayfa)";
+
+        String[] options = {
+            "📄 Bu Sayfayı Özetle",
+            chapterLabel,
+            "❓ Bu Sayfa Hakkında Soru Sor",
+            "🗂 Arşivimi Analiz Et"
+        };
         b.setItems(options, (d, which) -> {
             switch (which) {
                 case 0: summarizeCurrentPage(); break;
-                case 1: askQuestionAboutPage(); break;
-                case 2: analyzeMyArchive(); break;
+                case 1:
+                    int[] range = findCurrentChapterRange();
+                    summarizeChapter(range[0], range[1]); break;
+                case 2: askQuestionAboutPage(); break;
+                case 3: analyzeMyArchive(); break;
             }
         });
         b.setNegativeButton("İptal", null);
@@ -1248,6 +1265,162 @@ public class PdfViewerActivity extends android.app.Activity {
                 runOnUiThread(() -> { pd.dismiss();
                     Toast.makeText(this, "Hata: " + ex.getMessage(), Toast.LENGTH_LONG).show(); });
             }
+        }).start();
+    }
+
+
+    // ── Bölüm Algılama Sistemi ────────────────────────────────────────────────
+    // Bölüm başlığı kalıpları — Türkçe ve İngilizce
+    private static final java.util.regex.Pattern CHAPTER_PATTERN =
+        java.util.regex.Pattern.compile(
+            "^\\s*(bölüm|bolum|chapter|kisim|kısım|ünite|unite|part|fasil|fasl|" +
+            "giriş|giris|sonuç|sonuc|önsöz|onsoz|ekler|ek)\\s*[:\\-–—]?\\s*(.{0,60})$",
+            java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.MULTILINE
+        );
+
+    private static final java.util.regex.Pattern NUMBERED_CHAPTER =
+        java.util.regex.Pattern.compile(
+            "^\\s*(\\d+\\.?\\s+[A-ZÇĞİÖŞÜa-zçğışöşü].{2,60})$",
+            java.util.regex.Pattern.MULTILINE
+        );
+
+    // Cache: sayfa → bölüm başlığı
+    private java.util.TreeMap<Integer, String> chapterMap = null;
+
+    // Bölüm haritasını oluştur — PDF açılınca arka planda çalışır
+    private void buildChapterMapAsync() {
+        if (chapterMap != null) return;
+        new Thread(() -> {
+            chapterMap = new java.util.TreeMap<>();
+            try {
+                String path = getRealPathFromUri(android.net.Uri.parse(pdfUri));
+                if (path == null) return;
+                com.artifex.mupdf.fitz.Document doc =
+                    com.artifex.mupdf.fitz.Document.openDocument(path);
+                int pageCount = doc.countPages();
+
+                for (int p = 0; p < pageCount; p++) {
+                    com.artifex.mupdf.fitz.Page page = doc.loadPage(p);
+                    // Sayfanın ilk 300 karakterine bak — başlıklar sayfanın üstündedir
+                    com.artifex.mupdf.fitz.StructuredText st = page.toStructuredText("preserve-whitespace");
+                    String text = st != null ? st.copy() : "";
+                    page.destroy();
+
+                    if (text.isEmpty()) continue;
+                    // İlk 300 karakter — başlık bölgesi
+                    String top = text.substring(0, Math.min(300, text.length()));
+                    String[] lines = top.split("\n");
+
+                    for (String line : lines) {
+                        line = line.trim();
+                        if (line.isEmpty()) continue;
+                        java.util.regex.Matcher m1 = CHAPTER_PATTERN.matcher(line);
+                        java.util.regex.Matcher m2 = NUMBERED_CHAPTER.matcher(line);
+                        if (m1.find() || (m2.find() && line.length() > 5 && line.length() < 80)) {
+                            chapterMap.put(p, line);
+                            break;
+                        }
+                    }
+                }
+                doc.destroy();
+                android.util.Log.d("ChapterMap", "Bölümler bulundu: " + chapterMap.size());
+            } catch (Exception e) {
+                android.util.Log.d("ChapterMap", "Hata: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    // Mevcut sayfanın bölüm başlığını döndür
+    private String getChapterTitle(int page) {
+        if (chapterMap == null || chapterMap.isEmpty()) return null;
+        java.util.Map.Entry<Integer, String> entry = chapterMap.floorEntry(page);
+        return entry != null ? entry.getValue() : null;
+    }
+
+    // Mevcut sayfanın bölüm aralığını döndür [başlangıç, bitiş]
+    private int[] findCurrentChapterRange() {
+        if (chapterMap == null || chapterMap.isEmpty()) {
+            // Bölüm haritası yoksa mevcut sayfadan ±4 sayfa
+            return new int[]{Math.max(0, currentPage - 2),
+                             Math.min(totalPages - 1, currentPage + 4)};
+        }
+        java.util.Map.Entry<Integer, String> current = chapterMap.floorEntry(currentPage);
+        if (current == null) {
+            java.util.Map.Entry<Integer, String> next = chapterMap.ceilingEntry(currentPage);
+            return new int[]{0, next != null ? next.getKey() - 1 : totalPages - 1};
+        }
+        java.util.Map.Entry<Integer, String> next = chapterMap.higherEntry(currentPage);
+        int start = current.getKey();
+        int end   = next != null ? next.getKey() - 1 : totalPages - 1;
+        return new int[]{start, end};
+    }
+
+    // Sayfadan metin çek — MuPDF önce, OCR fallback
+    private String extractPageText(int page) {
+        try {
+            String path = getRealPathFromUri(android.net.Uri.parse(pdfUri));
+            if (path != null) {
+                com.artifex.mupdf.fitz.Document doc =
+                    com.artifex.mupdf.fitz.Document.openDocument(path);
+                com.artifex.mupdf.fitz.Page pg = doc.loadPage(page);
+                com.artifex.mupdf.fitz.StructuredText st = pg.toStructuredText("preserve-whitespace");
+                String text = st != null ? st.copy() : "";
+                pg.destroy(); doc.destroy();
+                if (!text.trim().isEmpty()) return text;
+            }
+        } catch (Exception e) { /* OCR'a düş */ }
+        // OCR cache fallback
+        try {
+            android.database.Cursor c = db.rawQuery(
+                "SELECT ocr_text FROM pdf_ocr_cache WHERE pdf_uri=? AND page=?",
+                new String[]{pdfUri, String.valueOf(page)});
+            String t = c.moveToFirst() ? c.getString(0) : "";
+            c.close(); return t;
+        } catch (Exception e) { return ""; }
+    }
+
+    // Bölüm özetleme
+    private void summarizeChapter(int fromPage, int toPage) {
+        android.app.ProgressDialog pd = new android.app.ProgressDialog(this);
+        String title = getChapterTitle(fromPage);
+        pd.setMessage(title != null ? "\"" + title + "\" özetleniyor..." :
+            (fromPage+1) + "-" + (toPage+1) + ". sayfalar özetleniyor...");
+        pd.setCancelable(false);
+        pd.show();
+
+        new Thread(() -> {
+            StringBuilder sb = new StringBuilder();
+            for (int p = fromPage; p <= toPage && p < totalPages; p++) {
+                String t = extractPageText(p);
+                if (!t.trim().isEmpty()) {
+                    sb.append("=== Sayfa ").append(p+1).append(" ===\n").append(t).append("\n\n");
+                }
+                if (sb.length() > 10000) break; // token limiti
+            }
+
+            if (sb.toString().trim().isEmpty()) {
+                runOnUiThread(() -> { pd.dismiss();
+                    Toast.makeText(this, "Bu bölümde metin bulunamadı", Toast.LENGTH_SHORT).show(); });
+                return;
+            }
+
+            String chapterName = title != null ? title : "Sayfa " + (fromPage+1) + "-" + (toPage+1);
+            String prompt = "Aşağıdaki kitap bölümünü Türkçe olarak özetle.\n" +
+                "Kitap: " + bookName + "\nBölüm: " + chapterName + "\n\n" +
+                sb.toString().substring(0, Math.min(sb.length(), 10000)) +
+                "\n\nAna fikirleri, önemli argümanları ve bölümün mesajını " +
+                "6-8 cümle ile özetle. Madde madde yaz.";
+
+            GeminiService.callGeminiPublic(prompt, new GeminiService.OnResultListener() {
+                @Override public void onResult(String result) {
+                    pd.dismiss();
+                    showAIResult(chapterName + " Özeti", result);
+                }
+                @Override public void onError(String error) {
+                    pd.dismiss();
+                    Toast.makeText(PdfViewerActivity.this, error, Toast.LENGTH_LONG).show();
+                }
+            });
         }).start();
     }
 
