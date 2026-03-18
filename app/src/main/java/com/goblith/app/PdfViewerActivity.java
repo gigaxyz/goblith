@@ -1129,45 +1129,56 @@ public class PdfViewerActivity extends android.app.Activity {
             try {
                 ensureOcrCacheTable();
                 String normQuery = turkishNormalize(fQuery);
-                String[] qWords = normQuery.split("\\s+");
-                java.util.List<String> validWords = new java.util.ArrayList<>();
-                for (String w : qWords) if (w.length() >= 2) validWords.add(w);
-                if (validWords.isEmpty()) {
-                    runOnUiThread(() -> { pd.dismiss();
-                        Toast.makeText(this, "Cok kisa kelime", Toast.LENGTH_SHORT).show(); });
+
+                // ── KATMAN 1: MuPDF metin katmanı — dijital PDF ──────────────
+                // Metin katmanı varsa %100 doğru, koordinat kesin
+                runOnUiThread(() -> { pd.setProgress(10); pd.setMessage("Metin katmanı aranıyor..."); });
+                int[]   mupdfResult = searchWithMuPdf(fQuery, normQuery);
+                float[] mupdfCoords = mupdfResult != null ? getMuPdfCoords(mupdfResult[0], fQuery, normQuery) : null;
+
+                if (mupdfResult != null) {
+                    final int page       = mupdfResult[0];
+                    final float[] coords = mupdfCoords;
+                    runOnUiThread(() -> {
+                        pd.dismiss();
+                        Toast.makeText(this, "Sayfa " + (page+1) + " ✓ (kesin)", Toast.LENGTH_SHORT).show();
+                        learnSearch(fQuery, page);
+                        showPage(page);
+                        new android.os.Handler(android.os.Looper.getMainLooper())
+                            .postDelayed(() -> showSearchOverlay(fQuery, coords), 500);
+                    });
                     return;
                 }
 
-                // OCR cache yoksa tara
-                int cachedPages = getCachedPageCount();
+                // ── KATMAN 2: OCR — taranmış PDF ─────────────────────────────
+                runOnUiThread(() -> { pd.setProgress(15); pd.setMessage("OCR taraması başlıyor..."); });
+
                 android.os.ParcelFileDescriptor pfd = getContentResolver()
                     .openFileDescriptor(android.net.Uri.parse(pdfUri), "r");
                 if (pfd == null) {
                     runOnUiThread(() -> { pd.dismiss();
-                        Toast.makeText(this, "PDF acilamadi", Toast.LENGTH_SHORT).show(); });
+                        Toast.makeText(this, "PDF açılamadı", Toast.LENGTH_SHORT).show(); });
                     return;
                 }
-                android.graphics.pdf.PdfRenderer renderer =
-                    new android.graphics.pdf.PdfRenderer(pfd);
+
+                android.graphics.pdf.PdfRenderer renderer = new android.graphics.pdf.PdfRenderer(pfd);
                 int totalPgs = renderer.getPageCount();
 
-                if (cachedPages < totalPgs) {
-                    runOnUiThread(() -> pd.setMessage("Sayfa taranıyor..."));
+                if (getCachedPageCount() < totalPgs) {
                     com.google.mlkit.vision.text.TextRecognizer recognizer =
                         com.google.mlkit.vision.text.TextRecognition.getClient(
                             com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS);
                     for (int p = 0; p < totalPgs; p++) {
                         if (isPageCached(p)) continue;
                         final int fP = p, fT = totalPgs;
-                        final int prog = 10 + (int)((p+1.0)/totalPgs*75);
+                        final int prog = 15 + (int)((p+1.0)/totalPgs*70);
                         runOnUiThread(() -> { pd.setProgress(prog);
-                            pd.setMessage("Sayfa " + (fP+1) + "/" + fT); });
+                            pd.setMessage("OCR: Sayfa " + (fP+1) + "/" + fT); });
                         android.graphics.pdf.PdfRenderer.Page pg = renderer.openPage(p);
                         int bw = pg.getWidth()*4, bh = pg.getHeight()*4;
                         android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(
                             bw, bh, android.graphics.Bitmap.Config.ARGB_8888);
-                        android.graphics.Canvas cvs = new android.graphics.Canvas(bmp);
-                        cvs.drawColor(android.graphics.Color.WHITE);
+                        new android.graphics.Canvas(bmp).drawColor(android.graphics.Color.WHITE);
                         android.graphics.Matrix mat = new android.graphics.Matrix();
                         mat.setScale(4, 4);
                         pg.render(bmp, null, mat, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
@@ -1177,23 +1188,23 @@ public class PdfViewerActivity extends android.app.Activity {
                                 com.google.android.gms.tasks.Tasks.await(
                                     recognizer.process(
                                         com.google.mlkit.vision.common.InputImage.fromBitmap(bmp, 0)));
-                            StringBuilder blocksJson = new StringBuilder("[");
+                            StringBuilder bj = new StringBuilder("[");
                             boolean first = true;
                             for (com.google.mlkit.vision.text.Text.TextBlock block : vt.getTextBlocks()) {
                                 android.graphics.Rect box = block.getBoundingBox();
                                 if (box == null) continue;
-                                if (!first) blocksJson.append(",");
+                                if (!first) bj.append(",");
                                 first = false;
-                                String bt = block.getText().replace("\"", "'").replace("\n", " ");
-                                blocksJson.append("{").append("\"t\":{\"").append(bt)
+                                String bt = block.getText().replace("\"","'").replace("\n"," ");
+                                bj.append("{\"t\":\"").append(bt)
                                     .append("\",\"x\":").append((float)box.left/bw)
                                     .append(",\"y\":").append((float)box.top/bh)
                                     .append(",\"w\":").append((float)box.width()/bw)
                                     .append(",\"h\":").append((float)box.height()/bh)
                                     .append("}");
                             }
-                            blocksJson.append("]");
-                            savePageOcrWithBlocks(p, fixOcrErrors(vt.getText()), blocksJson.toString());
+                            bj.append("]");
+                            savePageOcrWithBlocks(p, fixOcrErrors(vt.getText()), bj.toString());
                         } catch (Exception ex) { savePageOcrWithBlocks(p, "", "[]"); }
                         bmp.recycle();
                     }
@@ -1201,45 +1212,109 @@ public class PdfViewerActivity extends android.app.Activity {
                 }
                 renderer.close(); pfd.close();
 
-                // Cache'de ara
-                runOnUiThread(() -> { pd.setMessage("Eslesmeler aranıyor..."); pd.setProgress(90); });
+                // OCR cache'de ara
+                runOnUiThread(() -> { pd.setProgress(90); pd.setMessage("Eşleşme aranıyor..."); });
                 int bestPage = searchInOcrCache(normQuery);
 
                 if (bestPage < 0) {
                     runOnUiThread(() -> { pd.dismiss();
-                        Toast.makeText(this, "\"" + fQuery + "\" bulunamadi",
+                        Toast.makeText(this, "\"" + fQuery + "\" bulunamadı",
                             Toast.LENGTH_LONG).show(); });
                     return;
                 }
 
-                // En iyi bloğu bul
                 android.database.Cursor bc = db.rawQuery(
                     "SELECT blocks FROM pdf_ocr_cache WHERE pdf_uri=? AND page=?",
                     new String[]{pdfUri, String.valueOf(bestPage)});
                 float[] coords = null;
                 if (bc.moveToFirst()) {
-                    coords = findBestBlock(bc.getString(0), validWords.toArray(new String[0]));
+                    String[] qw = normQuery.split("\\s+");
+                    coords = findBestBlock(bc.getString(0), qw);
                 }
                 bc.close();
 
-                final int finalPage     = bestPage;
-                final float[] finalCoords = coords;
+                final int fp2 = bestPage;
+                final float[] fc2 = coords;
                 runOnUiThread(() -> {
                     pd.dismiss();
-                    Toast.makeText(this, "Sayfa " + (finalPage+1) + " bulundu",
-                        Toast.LENGTH_SHORT).show();
-                    learnSearch(fQuery, finalPage);
-                    showPage(finalPage);
+                    Toast.makeText(this, "Sayfa " + (fp2+1) + " (OCR)", Toast.LENGTH_SHORT).show();
+                    learnSearch(fQuery, fp2);
+                    showPage(fp2);
                     new android.os.Handler(android.os.Looper.getMainLooper())
-                        .postDelayed(() -> showSearchOverlay(fQuery, finalCoords), 500);
+                        .postDelayed(() -> showSearchOverlay(fQuery, fc2), 500);
                 });
 
             } catch (Exception ex) {
                 runOnUiThread(() -> { pd.dismiss();
-                    Toast.makeText(this, "Hata: " + ex.getMessage(),
-                        Toast.LENGTH_LONG).show(); });
+                    Toast.makeText(this, "Hata: " + ex.getMessage(), Toast.LENGTH_LONG).show(); });
             }
         }).start();
+    }
+
+    // MuPDF ile metin katmanında ara — [sayfa, hitIndex] döner
+    private int[] searchWithMuPdf(String query, String normQuery) {
+        try {
+            android.os.ParcelFileDescriptor pfd = getContentResolver()
+                .openFileDescriptor(android.net.Uri.parse(pdfUri), "r");
+            if (pfd == null) return null;
+            com.artifex.mupdf.fitz.Document doc =
+                com.artifex.mupdf.fitz.Document.openDocument(pfd.getFileDescriptor());
+            int pageCount = doc.countPages();
+            for (int p = 0; p < pageCount; p++) {
+                com.artifex.mupdf.fitz.Page page = doc.loadPage(p);
+                // Önce orijinal sorgu, sonra normalize
+                com.artifex.mupdf.fitz.Quad[] hits = page.search(query);
+                if (hits == null || hits.length == 0) hits = page.search(normQuery);
+                // Kök ile dene
+                if ((hits == null || hits.length == 0) && query.length() > 4) {
+                    String stem = turkishStem(turkishNormalize(query).split("\\s+")[0]);
+                    if (stem.length() >= 3) hits = page.search(stem);
+                }
+                page.destroy();
+                if (hits != null && hits.length > 0) {
+                    doc.destroy(); pfd.close();
+                    return new int[]{p};
+                }
+            }
+            doc.destroy(); pfd.close();
+        } catch (Exception e) {
+            android.util.Log.d("MuPDF", "Metin katmanı yok: " + e.getMessage());
+        }
+        return null;
+    }
+
+    // MuPDF ile belirli sayfadaki hit koordinatını al — normalize [0-1]
+    private float[] getMuPdfCoords(int pageNum, String query, String normQuery) {
+        try {
+            android.os.ParcelFileDescriptor pfd = getContentResolver()
+                .openFileDescriptor(android.net.Uri.parse(pdfUri), "r");
+            if (pfd == null) return null;
+            com.artifex.mupdf.fitz.Document doc =
+                com.artifex.mupdf.fitz.Document.openDocument(pfd.getFileDescriptor());
+            com.artifex.mupdf.fitz.Page page = doc.loadPage(pageNum);
+            com.artifex.mupdf.fitz.Rect bounds = page.getBounds();
+            float pw = bounds.x1 - bounds.x0;
+            float ph = bounds.y1 - bounds.y0;
+            com.artifex.mupdf.fitz.Quad[] hits = page.search(query);
+            if (hits == null || hits.length == 0) hits = page.search(normQuery);
+            if (hits != null && hits.length > 0) {
+                // En üstteki hit
+                com.artifex.mupdf.fitz.Quad best = hits[0];
+                for (com.artifex.mupdf.fitz.Quad q : hits) {
+                    if (q.ul_y < best.ul_y) best = q;
+                }
+                float x1 = Math.min(best.ul_x, best.ll_x) / pw;
+                float y1 = best.ul_y / ph;
+                float x2 = Math.max(best.ur_x, best.lr_x) / pw;
+                float y2 = best.ll_y / ph;
+                page.destroy(); doc.destroy(); pfd.close();
+                return new float[]{x1, y1, x2, y2, 1.0f};
+            }
+            page.destroy(); doc.destroy(); pfd.close();
+        } catch (Exception e) {
+            android.util.Log.d("MuPDF", "Coords hatası: " + e.getMessage());
+        }
+        return null;
     }
 
     // OCR cache fallback — MuPDF bulamazsa (taranmış PDF)
