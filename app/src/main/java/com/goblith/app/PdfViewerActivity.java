@@ -1271,11 +1271,11 @@ public class PdfViewerActivity extends android.app.Activity {
                 }
                 page.destroy();
                 if (hits != null && hits.length > 0) {
-                    doc.destroy(); pfd.close();
+                    doc.destroy();
                     return new int[]{p};
                 }
             }
-            doc.destroy(); pfd.close();
+            doc.destroy();
         } catch (Exception e) {
             android.util.Log.d("MuPDF", "Metin katmanı yok: " + e.getMessage());
         }
@@ -1305,10 +1305,10 @@ public class PdfViewerActivity extends android.app.Activity {
                 float y1 = best.ul_y / ph;
                 float x2 = Math.max(best.ur_x, best.lr_x) / pw;
                 float y2 = best.ll_y / ph;
-                page.destroy(); doc.destroy(); pfd.close();
+                page.destroy(); doc.destroy();
                 return new float[]{x1, y1, x2, y2, 1.0f};
             }
-            page.destroy(); doc.destroy(); pfd.close();
+            page.destroy(); doc.destroy();
         } catch (Exception e) {
             android.util.Log.d("MuPDF", "Coords hatası: " + e.getMessage());
         }
@@ -2113,6 +2113,23 @@ public class PdfViewerActivity extends android.app.Activity {
 
 
     // ── Buton yardımcıları ────────────────────────────────────────────────────
+
+    private String getRealPathFromUri(android.net.Uri uri) {
+        try {
+            if ("content".equals(uri.getScheme())) {
+                java.io.File tempFile = new java.io.File(getCacheDir(), "mupdf_temp.pdf");
+                try (java.io.InputStream in = getContentResolver().openInputStream(uri);
+                     java.io.FileOutputStream out = new java.io.FileOutputStream(tempFile)) {
+                    if (in == null) return null;
+                    byte[] buf = new byte[8192]; int len;
+                    while ((len = in.read(buf)) > 0) out.write(buf, 0, len);
+                }
+                return tempFile.getAbsolutePath();
+            }
+            return uri.getPath();
+        } catch (Exception e) { return null; }
+    }
+
     private Button makeNavBtn(String t){Button b=new Button(this);b.setText(t);b.setBackgroundColor(0xFF1A3A6A);b.setTextColor(0xFFFFFFFF);b.setTextSize(20);b.setTypeface(null,android.graphics.Typeface.BOLD);b.setPadding(28,8,28,8);return b;}
     private Button makeSmallBtn(String t,int c){Button b=new Button(this);b.setText(t);b.setBackgroundColor(c);b.setTextColor(0xFFFFFFFF);b.setTextSize(11);b.setTypeface(null,android.graphics.Typeface.BOLD);b.setPadding(8,8,8,8);return b;}
     private Button makeActionBtn(String t,int c){Button b=new Button(this);b.setText(t);b.setBackgroundColor(c);b.setTextColor(0xFFFFFFFF);b.setTextSize(13);b.setTypeface(null,android.graphics.Typeface.BOLD);b.setPadding(16,12,16,12);return b;}
