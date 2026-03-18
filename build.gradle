@@ -9,5 +9,7 @@ allprojects {
         google()
         mavenCentral()
         maven { url 'https://jitpack.io' }
+        maven { url 'http://maven.ghostscript.com'
+            allowInsecureProtocol = true }
     }
 }
