@@ -11,7 +11,7 @@ public class GeminiService {
     // Gemini 1.5 Flash — ücretsiz tier
     private static final String API_KEY = "AIzaSyANtbPxnS6JOPVHfxT3wtB2O-EJwMODe0M";
     private static final String API_URL =
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" + API_KEY;
+        "https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=" + API_KEY;
 
     public interface OnResultListener {
         void onResult(String result);
