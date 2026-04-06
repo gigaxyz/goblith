@@ -30,7 +30,7 @@ jobs:
 
       - name: Inject API Keys
         run: |
-          sed -i "s/GEMINI_KEY_PLACEHOLDER/${{ secrets.GEMINI_API_KEY }}/g" app/src/main/java/com/goblith/app/GeminiService.java
+          sed -i "s/GEMINI_KEY_PLACEHOLDER/${{ secrets.API_KEY }}/g" app/src/main/java/com/goblith/app/GeminiService.java
 
       - name: Build debug APK
         run: ./gradlew assembleDebug
